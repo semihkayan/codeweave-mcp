@@ -9,7 +9,8 @@
     "aidevkit-init": "dist/scripts/init.js",
     "aidevkit-reindex": "dist/scripts/reindex.js",
     "aidevkit-check-docstrings": "dist/scripts/check-docstrings.js",
-    "aidevkit-graph": "dist/index.js"
+    "aidevkit-graph": "dist/index.js",
+    "aidevkit-setup": "dist/scripts/setup.js"
   },
   "files": [
     "dist/**/*.js",

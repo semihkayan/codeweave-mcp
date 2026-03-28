@@ -36,27 +36,36 @@ Codebase graph analysis for AI agents. Goes beyond simple RAG — builds call gr
 ## Quick Start
 
 ```bash
-# 1. Install
-npm install -g @aidevkit/graph
-
-# 2. Install Ollama + embedding model
-brew install ollama
-ollama pull qwen3-embedding:0.6b
-
-# 3. Initialize your project
 cd your-project
-aidevkit-init
-
-# 4. Add to Claude Desktop config (~/.claude/claude_desktop_config.json)
+npx @aidevkit/graph setup
 ```
+
+That's it. This single command:
+1. Installs `@aidevkit/graph` globally
+2. Installs Ollama if needed (brew/winget/curl)
+3. Downloads the embedding model (639 MB)
+4. Configures Claude Code to use the MCP server
+5. Indexes your project
+
+Open the project in Claude Code and start asking questions.
+
+### Manual Install
+
+If you prefer step-by-step:
+
+```bash
+npm install -g @aidevkit/graph
+ollama pull qwen3-embedding:0.6b
+aidevkit-init
+```
+
+Add to Claude Code global config (`~/.claude/settings.json`):
 
 ```json
 {
   "mcpServers": {
-    "aidevkit-graph": {
-      "command": "aidevkit-graph",
-      "args": [],
-      "cwd": "/path/to/your/project"
+    "aidevkit": {
+      "command": "aidevkit-graph"
     }
   }
 }
