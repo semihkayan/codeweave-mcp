@@ -1,11 +1,14 @@
 {
   "name": "@aidevkit/graph",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Codebase graph analysis for AI agents — AST + call graph + type graph + hybrid semantic search via MCP",
   "type": "module",
-  "engines": { "node": ">=20.0.0" },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "main": "dist/index.js",
   "bin": {
+    "graph": "dist/scripts/setup.js",
     "aidevkit-graph": "dist/scripts/setup.js",
     "graph-server": "dist/index.js",
     "graph-init": "dist/scripts/init.js",
