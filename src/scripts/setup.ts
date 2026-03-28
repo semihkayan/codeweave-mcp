@@ -223,7 +223,13 @@ async function main() {
     if (typeof projectSettings.mcpServers !== "object" || projectSettings.mcpServers === null) {
       projectSettings.mcpServers = {};
     }
-    projectSettings.mcpServers.aidevkit = { command: "graph-server" };
+    // Use absolute paths — Claude Code may not have PATH access
+    const nodePath = runOrNull(os.platform() === "win32" ? "where node" : "which node") || "node";
+    const serverPath = runOrNull(os.platform() === "win32" ? "where graph-server" : "which graph-server") || "graph-server";
+    projectSettings.mcpServers.aidevkit = {
+      command: nodePath,
+      args: [serverPath],
+    };
     const tmpPath = projectSettingsPath + ".tmp";
     writeFileSync(tmpPath, JSON.stringify(projectSettings, null, 2));
     const { renameSync } = await import("node:fs");
