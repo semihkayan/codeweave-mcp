@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.code-context/
+*.log
+.DS_Store

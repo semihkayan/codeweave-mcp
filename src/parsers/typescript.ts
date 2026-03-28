@@ -1,0 +1,326 @@
+import { createRequire } from "node:module";
+const require = createRequire(import.meta.url);
+import type { RawFunctionInfo, RawCallInfo, RawImportInfo, RawTypeRelationship } from "../types/index.js";
+import type { TreeSitterLanguageConfig } from "./tree-sitter-parser.js";
+import { walkNodes, findParent, type SyntaxNode } from "./ast-utils.js";
+
+
+
+function getJSDoc(node: SyntaxNode): string | null {
+  // JSDoc is a comment sibling BEFORE the function/class node
+  const parent = node.parent;
+  if (!parent) return null;
+
+  const idx = parent.children.indexOf(node);
+  // Look at previous sibling
+  for (let i = idx - 1; i >= 0; i--) {
+    const sibling = parent.children[i];
+    if (sibling.type === "comment" && sibling.text.startsWith("/**")) {
+      return sibling.text
+        .replace(/^\/\*\*\s*\n?/, "")
+        .replace(/\n?\s*\*\/$/, "")
+        .replace(/^\s*\*\s?/gm, "")
+        .trim();
+    }
+    // Stop if we hit a non-comment node
+    if (sibling.type !== "comment") break;
+  }
+  return null;
+}
+
+function getVisibility(node: SyntaxNode): "public" | "private" | "protected" {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.children[i];
+    if (child.type === "accessibility_modifier") {
+      const text = child.text;
+      if (text === "private") return "private";
+      if (text === "protected") return "protected";
+    }
+  }
+  // Check name convention
+  const name = node.childForFieldName("name")?.text ||
+               node.children.find((c: SyntaxNode) => c.type === "property_identifier")?.text;
+  if (name?.startsWith("_")) return "private";
+  return "public";
+}
+
+function isAsync(node: SyntaxNode): boolean {
+  for (let i = 0; i < node.childCount; i++) {
+    if (node.children[i].type === "async") return true;
+  }
+  return false;
+}
+
+function getReturnType(node: SyntaxNode): string | null {
+  const typeAnnotation = node.children?.find((c: SyntaxNode) => c.type === "type_annotation");
+  if (!typeAnnotation) return null;
+  // Skip the ":"
+  for (let i = 0; i < typeAnnotation.childCount; i++) {
+    const child = typeAnnotation.children[i];
+    if (child.type !== ":") return child.text;
+  }
+  return null;
+}
+
+function getParams(node: SyntaxNode): string {
+  const params = node.children?.find((c: SyntaxNode) => c.type === "formal_parameters");
+  return params?.text || "()";
+}
+
+function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionInfo[] {
+  const results: RawFunctionInfo[] = [];
+
+  // Regular functions (including exported)
+  const funcDecls = walkNodes(rootNode, ["function_declaration"]);
+  for (const node of funcDecls) {
+    const name = node.childForFieldName("name")?.text;
+    if (!name) continue;
+
+    const docNode = node.parent?.type === "export_statement" ? node.parent : node;
+    results.push({
+      name,
+      kind: "function",
+      signature: buildSignature(name, getParams(node), getReturnType(node)),
+      lineStart: (docNode).startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
+      visibility: "public",
+      isAsync: isAsync(node),
+      docstring: getJSDoc(docNode) || undefined,
+    });
+  }
+
+  // Arrow functions: const name = (...) => { ... }
+  const lexDecls = walkNodes(rootNode, ["lexical_declaration"]);
+  for (const decl of lexDecls) {
+    const declarators = walkNodes(decl, ["variable_declarator"]);
+    for (const vd of declarators) {
+      const nameNode = vd.childForFieldName("name");
+      const valueNode = vd.childForFieldName("value");
+      if (!nameNode || !valueNode || valueNode.type !== "arrow_function") continue;
+
+      const name = nameNode.text;
+      const outerNode = decl.parent?.type === "export_statement" ? decl.parent : decl;
+      results.push({
+        name,
+        kind: "function",
+        signature: buildSignature(name, getParams(valueNode), getReturnType(valueNode)),
+        lineStart: outerNode.startPosition.row + 1,
+        lineEnd: decl.endPosition.row + 1,
+        visibility: "public",
+        isAsync: isAsync(valueNode),
+        docstring: getJSDoc(outerNode) || undefined,
+      });
+    }
+  }
+
+  // Class methods
+  const classDeclNodes = walkNodes(rootNode, ["class_declaration"]);
+  for (const classNode of classDeclNodes) {
+    const className = classNode.childForFieldName("name")?.text ||
+                      classNode.children.find((c: SyntaxNode) => c.type === "type_identifier")?.text;
+    if (!className) continue;
+
+    // Heritage
+    const heritage = classNode.children.find((c: SyntaxNode) => c.type === "class_heritage");
+    const implementsList: string[] = [];
+    const extendsList: string[] = [];
+    if (heritage) {
+      for (let i = 0; i < heritage.childCount; i++) {
+        const clause = heritage.children[i];
+        if (clause.type === "implements_clause") {
+          const types = walkNodes(clause, ["type_identifier"]);
+          implementsList.push(...types.map((t: SyntaxNode) => t.text));
+        } else if (clause.type === "extends_clause") {
+          const types = walkNodes(clause, ["type_identifier", "identifier"]);
+          extendsList.push(...types.map((t: SyntaxNode) => t.text));
+        }
+      }
+    }
+
+    // Methods
+    const body = classNode.children.find((c: SyntaxNode) => c.type === "class_body");
+    if (!body) continue;
+
+    const methodNames: string[] = [];
+    const methods = walkNodes(body, ["method_definition"]);
+    for (const method of methods) {
+      const methodName = method.children.find((c: SyntaxNode) => c.type === "property_identifier")?.text;
+      if (!methodName) continue;
+      methodNames.push(methodName);
+
+      const fullName = `${className}.${methodName}`;
+      results.push({
+        name: fullName,
+        kind: "method",
+        signature: buildSignature(methodName, getParams(method), getReturnType(method)),
+        lineStart: method.startPosition.row + 1,
+        lineEnd: method.endPosition.row + 1,
+        visibility: getVisibility(method),
+        isAsync: isAsync(method),
+        docstring: getJSDoc(method) || undefined,
+      });
+    }
+
+    // Class record
+    const classOuterNode = classNode.parent?.type === "export_statement" ? classNode.parent : classNode;
+    results.push({
+      name: className,
+      kind: "class",
+      signature: `class ${className}${extendsList.length > 0 ? ` extends ${extendsList.join(", ")}` : ""}${implementsList.length > 0 ? ` implements ${implementsList.join(", ")}` : ""}`,
+      lineStart: classOuterNode.startPosition.row + 1,
+      lineEnd: classNode.endPosition.row + 1,
+      visibility: "public",
+      isAsync: false,
+      docstring: getJSDoc(classOuterNode) || undefined,
+      classInfo: { inherits: [...extendsList, ...implementsList], methods: methodNames },
+    });
+  }
+
+  return results;
+}
+
+function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number): RawCallInfo[] {
+  const results: RawCallInfo[] = [];
+  const callNodes = walkNodes(rootNode, ["call_expression"]);
+
+  for (const node of callNodes) {
+    const row = node.startPosition.row + 1;
+    if (row < lineStart || row > lineEnd) continue;
+
+    const func = node.childForFieldName("function");
+    if (!func) continue;
+
+    if (func.type === "identifier") {
+      results.push({ name: func.text, line: row });
+    } else if (func.type === "member_expression") {
+      const obj = func.childForFieldName("object");
+      const prop = func.childForFieldName("property");
+      if (prop) {
+        results.push({ name: prop.text, objectName: obj?.text, line: row });
+      }
+    }
+  }
+
+  return results;
+}
+
+function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[] {
+  const results: RawImportInfo[] = [];
+  const importNodes = walkNodes(rootNode, ["import_statement"]);
+
+  for (const node of importNodes) {
+    const sourceNode = node.children.find((c: SyntaxNode) => c.type === "string");
+    const modulePath = sourceNode?.text?.replace(/['"]/g, "") || "";
+
+    const importClause = node.children.find((c: SyntaxNode) => c.type === "import_clause");
+    if (!importClause) continue;
+
+    for (let i = 0; i < importClause.childCount; i++) {
+      const child = importClause.children[i];
+
+      if (child.type === "identifier") {
+        // Default import: import Foo from './foo'
+        results.push({ importedName: child.text, modulePath, isDefault: true });
+      } else if (child.type === "named_imports") {
+        // Named imports: import { Foo, Bar } from './foo'
+        const specifiers = walkNodes(child, ["import_specifier"]);
+        for (const spec of specifiers) {
+          const nameNode = spec.childForFieldName("name");
+          results.push({ importedName: nameNode?.text || spec.text, modulePath, isDefault: false });
+        }
+      } else if (child.type === "namespace_import") {
+        // Namespace: import * as Foo from './foo'
+        const name = child.children.find((c: SyntaxNode) => c.type === "identifier");
+        if (name) results.push({ importedName: name.text, modulePath, isDefault: false });
+      }
+    }
+  }
+
+  return results;
+}
+
+function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTypeRelationship[] {
+  const results: RawTypeRelationship[] = [];
+
+  // Classes
+  const classNodes = walkNodes(rootNode, ["class_declaration"]);
+  for (const node of classNodes) {
+    const name = node.children.find((c: SyntaxNode) => c.type === "type_identifier")?.text;
+    if (!name) continue;
+
+    const implementsList: string[] = [];
+    const extendsList: string[] = [];
+    const heritage = node.children.find((c: SyntaxNode) => c.type === "class_heritage");
+    if (heritage) {
+      for (let i = 0; i < heritage.childCount; i++) {
+        const clause = heritage.children[i];
+        if (clause.type === "implements_clause") {
+          implementsList.push(...walkNodes(clause, ["type_identifier"]).map((t: SyntaxNode) => t.text));
+        } else if (clause.type === "extends_clause") {
+          extendsList.push(...walkNodes(clause, ["type_identifier", "identifier"]).map((t: SyntaxNode) => t.text));
+        }
+      }
+    }
+
+    // Collect type usages from method signatures
+    const usesTypes: string[] = [];
+    const methods = walkNodes(node, ["method_definition"]);
+    for (const method of methods) {
+      const typeAnnotations = walkNodes(method, ["type_annotation"]);
+      for (const ta of typeAnnotations) {
+        const typeIds = walkNodes(ta, ["type_identifier"]);
+        for (const tid of typeIds) {
+          const t = tid.text;
+          if (!["string", "number", "boolean", "void", "any", "never", "unknown", "null", "undefined"].includes(t)) {
+            if (!usesTypes.includes(t)) usesTypes.push(t);
+          }
+        }
+      }
+    }
+
+    results.push({
+      className: name,
+      kind: "class",
+      implements: implementsList,
+      extends: extendsList,
+      usesTypes,
+      filePath,
+      lineStart: node.startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
+    });
+  }
+
+  // Interfaces
+  const interfaceNodes = walkNodes(rootNode, ["interface_declaration"]);
+  for (const node of interfaceNodes) {
+    const name = node.children.find((c: SyntaxNode) => c.type === "type_identifier")?.text;
+    if (!name) continue;
+
+    results.push({
+      className: name,
+      kind: "interface",
+      implements: [],
+      extends: [],
+      usesTypes: [],
+      filePath,
+      lineStart: node.startPosition.row + 1,
+      lineEnd: node.endPosition.row + 1,
+    });
+  }
+
+  return results;
+}
+
+function buildSignature(name: string, params: string, returnType: string | null): string {
+  return returnType ? `${name}${params}: ${returnType}` : `${name}${params}`;
+}
+
+export const typescriptConfig: TreeSitterLanguageConfig = {
+  grammar: require("tree-sitter-typescript").typescript,
+  extensions: [".ts", ".tsx"],
+  extractFunctions,
+  extractCalls,
+  extractImports,
+  extractDocstring: getJSDoc,
+  extractTypeRelationships,
+};

@@ -1,0 +1,78 @@
+import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import { parse as parseYaml } from "yaml";
+import { z } from "zod";
+import type { Config } from "../types/interfaces.js";
+
+const ConfigSchema = z.object({
+  projectRoot: z.string().default("."),
+  workspaces: z.array(z.string()).optional(),
+  embedding: z.object({
+    model: z.string().default("qwen3-embedding:0.6b"),
+    ollamaUrl: z.string().default("http://localhost:11434"),
+    dimensions: z.number().default(1024),
+    batchSize: z.number().default(64),
+    instruction: z.string().optional().default("Given a code search query, retrieve relevant code snippets that match the query"),
+  }).default({}),
+  parser: z.object({
+    languages: z.record(z.array(z.string())).default({
+      python: [".py"],
+      typescript: [".ts", ".tsx"],
+      javascript: [".js", ".jsx"],
+      go: [".go"],
+      rust: [".rs"],
+      java: [".java"],
+      csharp: [".cs"],
+    }),
+    ignore: z.array(z.string()).default([
+      "node_modules/**",
+      "**/__pycache__/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.min.js",
+      "**/*.generated.*",
+      "**/vendor/**",
+      "**/.git/**",
+    ]),
+    sourceRoot: z.string().optional(),
+  }).default({}),
+  moduleSummary: z.object({
+    compactThreshold: z.number().default(30),
+    filesOnlyThreshold: z.number().default(100),
+    maxTokenBudget: z.number().default(4000),
+  }).default({}),
+  search: z.object({
+    rrfK: z.number().default(60),
+    expandCamelCase: z.boolean().default(true),
+    exactNameBoost: z.boolean().default(true),
+  }).default({}),
+  indexing: z.object({
+    parallelWorkers: z.number().default(4),
+    maxFileSizeKb: z.number().default(500),
+    maxChunkTokens: z.number().default(2000),
+  }).default({}),
+  watcher: z.object({
+    debounceMs: z.number().default(500),
+    minIntervalMs: z.number().default(2000),
+  }).default({}),
+});
+
+export async function loadConfig(projectRoot?: string): Promise<Config> {
+  const root = path.resolve(projectRoot || process.cwd());
+  const configPath = path.join(root, ".code-context", "config.yaml");
+
+  let rawConfig: Record<string, unknown> = {};
+
+  if (existsSync(configPath)) {
+    try {
+      const content = await readFile(configPath, "utf-8");
+      rawConfig = parseYaml(content) || {};
+    } catch {
+      // Invalid YAML — use defaults
+    }
+  }
+
+  const parsed = ConfigSchema.parse({ ...rawConfig, projectRoot: root });
+  return parsed as Config;
+}

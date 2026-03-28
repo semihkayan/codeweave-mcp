@@ -1,0 +1,82 @@
+{
+  "name": "@codesight/graph",
+  "version": "0.1.0",
+  "description": "Codebase graph analysis for AI agents — AST + call graph + type graph + hybrid semantic search via MCP",
+  "type": "module",
+  "engines": { "node": ">=20.0.0" },
+  "main": "dist/index.js",
+  "bin": {
+    "codesight-init": "dist/scripts/init.js",
+    "codesight-reindex": "dist/scripts/reindex.js",
+    "codesight-check-docstrings": "dist/scripts/check-docstrings.js",
+    "codesight-graph": "dist/index.js"
+  },
+  "files": [
+    "dist/**/*.js",
+    "dist/**/*.d.ts",
+    "dist/**/*.js.map",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest",
+    "test:integration": "vitest run test/tools",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "code-analysis",
+    "code-intelligence",
+    "call-graph",
+    "type-graph",
+    "ast",
+    "semantic-search",
+    "codebase-indexing",
+    "ai-tools",
+    "claude",
+    "cursor",
+    "tree-sitter",
+    "lancedb"
+  ],
+  "author": "Semih Kayan",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/semihkayan/codesight-graph.git"
+  },
+  "homepage": "https://github.com/semihkayan/codesight-graph#readme",
+  "bugs": {
+    "url": "https://github.com/semihkayan/codesight-graph/issues"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "@lancedb/lancedb": "^0.27.0",
+    "apache-arrow": "^18.0.0",
+    "tree-sitter": "^0.25.0",
+    "tree-sitter-python": "^0.23.0",
+    "tree-sitter-typescript": "^0.23.0",
+    "tree-sitter-javascript": "^0.23.0",
+    "tree-sitter-go": "^0.23.0",
+    "tree-sitter-rust": "^0.23.0",
+    "tree-sitter-java": "^0.23.0",
+    "tree-sitter-c-sharp": "^0.23.0",
+    "glob": "^11.0.0",
+    "ignore": "^6.0.0",
+    "yaml": "^2.6.0",
+    "simple-git": "^3.25.0",
+    "chokidar": "^4.0.0",
+    "zod": "^3.23.0",
+    "pino": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "tsx": "^4.16.0",
+    "vitest": "^3.0.0",
+    "eslint": "^9.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
