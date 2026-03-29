@@ -42,9 +42,21 @@ export function buildChunk(record: FunctionRecord, config: ChunkConfig): string 
 }
 
 function extractParamInfo(signature: string): string | null {
-  const match = signature.match(/\((.+?)\)/);
-  if (!match || match[1].trim() === "") return null;
-  return match[1];
+  // Find the outermost parentheses (handles nested generics like Map<string, number>)
+  const openIdx = signature.indexOf("(");
+  if (openIdx === -1) return null;
+  let depth = 0;
+  for (let i = openIdx; i < signature.length; i++) {
+    if (signature[i] === "(") depth++;
+    else if (signature[i] === ")") {
+      depth--;
+      if (depth === 0) {
+        const params = signature.slice(openIdx + 1, i).trim();
+        return params || null;
+      }
+    }
+  }
+  return null;
 }
 
 function extractReturnType(signature: string): string | null {

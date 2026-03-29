@@ -108,9 +108,9 @@ export class FileWatcher implements IFileWatcher {
       logger.error({ err }, "FileWatcher flush error");
     } finally {
       this.flushing = false;
+      this.flushQueued = false;
 
-      if (this.flushQueued && this.pendingChanges.size > 0) {
-        this.flushQueued = false;
+      if (this.pendingChanges.size > 0) {
         this.scheduleFlush();
       }
     }

@@ -72,6 +72,11 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
     parsers: ILanguageParser[],
     projectRoot: string,
   ): Promise<void> {
+    // Remove old relationships for these files before adding new ones
+    for (const filePath of files) {
+      this.removeByFile(filePath);
+    }
+
     for (const filePath of files) {
       const parser = parsers.find(p => p.canParse(filePath));
       if (!parser) continue;
@@ -117,12 +122,23 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
     const filePrefix = `${filePath}::`;
     for (const [name, node] of this.graph) {
       if (node.filePath === filePath) {
-        this.graph.delete(name);
-        continue;
+        // Don't delete the node — other files may reference it.
+        // Clear file-owned data but preserve cross-file references.
+        node.filePath = "";
+        node.lineStart = 0;
+        node.lineEnd = 0;
       }
+      // Remove references FROM this file (both own nodes and references to this file's classes)
       node.implementors = node.implementors.filter(id => !id.startsWith(filePrefix));
       node.extenders = node.extenders.filter(id => !id.startsWith(filePrefix));
       node.usedBy = node.usedBy.filter(id => !id.startsWith(filePrefix));
+    }
+
+    // Clean up empty shell nodes (no file, no references) to avoid unbounded growth
+    for (const [name, node] of this.graph) {
+      if (!node.filePath && node.implementors.length === 0 && node.extenders.length === 0 && node.usedBy.length === 0) {
+        this.graph.delete(name);
+      }
     }
   }
 

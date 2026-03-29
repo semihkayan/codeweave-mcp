@@ -1,6 +1,6 @@
 import type {
   ISearchPipeline, IVectorDatabase, IFullTextSearch, IResultMerger,
-  IEmbeddingProvider, IFunctionIndexReader,
+  IEmbeddingProvider,
 } from "../../types/interfaces.js";
 import type { SearchResult, SearchFilter, RankedResult } from "../../types/index.js";
 
@@ -14,7 +14,6 @@ export class HybridSearchPipeline implements ISearchPipeline {
     private fts: IFullTextSearch,
     private merger: IResultMerger,
     private embedding: IEmbeddingProvider,
-    private index: IFunctionIndexReader,
   ) {}
 
   private async isEmbeddingAvailable(): Promise<boolean> {

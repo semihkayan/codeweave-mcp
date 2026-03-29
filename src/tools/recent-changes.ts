@@ -1,6 +1,5 @@
 import type { AppContext } from "../types/interfaces.js";
 import { resolveWorkspaceOrError, textResponse, errorResponse } from "./tool-utils.js";
-import { getChangedFiles, getRecentCommits, isGitRepo } from "../utils/git-utils.js";
 
 export async function handleRecentChanges(
   args: { workspace?: string; since?: string; scope?: string },
@@ -11,12 +10,12 @@ export async function handleRecentChanges(
   const ws = resolved.ws;
   const since = args.since || "HEAD~5";
 
-  if (!(await isGitRepo(ws.projectRoot))) {
+  if (!(await ctx.git.isGitRepo(ws.projectRoot))) {
     return errorResponse("PARSE_ERROR", "Not a git repository.");
   }
 
-  const changedFiles = await getChangedFiles(ws.projectRoot, since);
-  const commits = await getRecentCommits(ws.projectRoot, since);
+  const changedFiles = await ctx.git.getChangedFiles(ws.projectRoot, since);
+  const commits = await ctx.git.getRecentCommits(ws.projectRoot, since);
 
   // Map changed files to function-level changes
   const functionChanges: Array<{
@@ -38,7 +37,6 @@ export async function handleRecentChanges(
         });
       }
     } else {
-      // File changed but not in index (new file, or not a supported language)
       functionChanges.push({
         function: "(file-level)",
         file: change.filePath,

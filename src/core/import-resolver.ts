@@ -5,7 +5,7 @@ import type { ImportMap } from "../types/index.js";
 
 export class ImportResolver implements IImportResolver {
   private maxBarrelDepth = 5;
-  private javaSourceRoots: string[] | null = null; // Cached
+  private javaSourceRootsCache = new Map<string, string[]>(); // Keyed by projectRoot
 
   constructor(private parsers: ILanguageParser[]) {}
 
@@ -70,7 +70,8 @@ export class ImportResolver implements IImportResolver {
   }
 
   private getJavaSourceRoots(projectRoot: string): string[] {
-    if (this.javaSourceRoots) return this.javaSourceRoots;
+    const cached = this.javaSourceRootsCache.get(projectRoot);
+    if (cached) return cached;
 
     const candidates = [
       path.join(projectRoot, "src/main/java"),
@@ -78,8 +79,9 @@ export class ImportResolver implements IImportResolver {
       path.join(projectRoot, "src"),
     ];
 
-    this.javaSourceRoots = candidates.filter(d => existsSync(d));
-    return this.javaSourceRoots;
+    const roots = candidates.filter(d => existsSync(d));
+    this.javaSourceRootsCache.set(projectRoot, roots);
+    return roots;
   }
 
   // === Python: payments.stripe_client → payments/stripe_client.py ===

@@ -21,39 +21,43 @@ export async function reembedFunctions(
   };
   const chunks = records.map(r => buildChunk(r, chunkConfig));
 
-  // Batch embed — with partial failure protection
+  // Batch embed — skip failed batches instead of inserting zero vectors
   const batchSize = config.embedding.batchSize;
+  const successIndices: number[] = [];
   const allVectors: Float32Array[] = [];
 
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
     try {
       const vectors = await embedding.embedDocuments(batch);
-      allVectors.push(...vectors);
-    } catch (err) {
-      // Fill failed batch with zero vectors to maintain index alignment
-      for (let j = 0; j < batch.length; j++) {
-        allVectors.push(new Float32Array(embedding.dimensions));
+      for (let j = 0; j < vectors.length; j++) {
+        allVectors.push(vectors[j]);
+        successIndices.push(i + j);
       }
+    } catch {
+      // Skip failed batch — these records won't be embedded
+      // They'll be retried on the next reindex or file change
     }
   }
 
-  // Safety: ensure vectors and records have same length
-  if (allVectors.length !== records.length) return;
+  if (successIndices.length === 0) return;
 
-  // Build VectorRows
-  const rows: VectorRow[] = records.map((record, i) => ({
-    id: record.id,
-    vector: allVectors[i],
-    filePath: record.filePath,
-    module: record.module,
-    name: record.name,
-    signature: record.signature,
-    summary: record.docstring?.summary || "",
-    tags: record.docstring?.tags.length ? `,${record.docstring.tags.join(",")},` : "",
-    sideEffects: record.docstring?.sideEffects.length ? `,${record.docstring.sideEffects.join(",")},` : "",
-    chunkText: chunks[i],
-  }));
+  // Build VectorRows only for successfully embedded records
+  const rows: VectorRow[] = successIndices.map((idx, i) => {
+    const record = records[idx];
+    return {
+      id: record.id,
+      vector: allVectors[i],
+      filePath: record.filePath,
+      module: record.module,
+      name: record.name,
+      signature: record.signature,
+      summary: record.docstring?.summary || "",
+      tags: record.docstring?.tags.length ? `,${record.docstring.tags.join(",")},` : "",
+      sideEffects: record.docstring?.sideEffects.length ? `,${record.docstring.sideEffects.join(",")},` : "",
+      chunkText: chunks[idx],
+    };
+  });
 
   await vectorDb.upsert(rows);
 }

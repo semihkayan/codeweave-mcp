@@ -60,9 +60,12 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
     if (!name) continue;
 
     // Determine if method (inside class body)
-    const isMethod = node.parent?.parent?.type === "class_definition";
+    // Walk up: function_definition → block → class_definition (normal)
+    // Or: function_definition → decorated_definition → block → class_definition (decorated)
+    const classParent = findParent(node, "class_definition");
+    const isMethod = classParent !== null;
     const className = isMethod
-      ? node.parent?.parent?.childForFieldName("name")?.text
+      ? classParent.childForFieldName("name")?.text
       : null;
 
     results.push({

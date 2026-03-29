@@ -97,8 +97,12 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
     this.buildReverseGraph(index);
   }
 
-  removeByFile(filePath: string, index: IFunctionIndexReader): void {
-    const recordIds = index.getByFile(filePath).map(r => r.id);
+  removeByFile(filePath: string, _index: IFunctionIndexReader): void {
+    // Find record IDs from the graph itself (not the index, which may already be cleared)
+    // ID format: "filePath::functionName"
+    const filePrefix = `${filePath}::`;
+    const recordIds = Array.from(this.graph.keys()).filter(id => id.startsWith(filePrefix));
+
     for (const id of recordIds) {
       const entry = this.graph.get(id);
       if (entry) {
@@ -252,6 +256,11 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
   }
 
   private buildReverseGraph(index: IFunctionIndexReader): void {
+    // Clear all calledBy arrays first to avoid stale/duplicate entries
+    for (const entry of this.graph.values()) {
+      entry.calledBy = [];
+    }
+
     for (const [callerId, entry] of this.graph) {
       for (const call of entry.calls) {
         if (call.resolvedId) {
@@ -259,15 +268,12 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
           if (!callerRecord) continue;
           const targetEntry = this.graph.get(call.resolvedId);
           if (targetEntry) {
-            // Avoid duplicates
-            if (!targetEntry.calledBy.some(c => c.caller === callerId && c.line === call.line)) {
-              targetEntry.calledBy.push({
-                caller: callerId,
-                callerName: callerRecord.name,
-                file: callerRecord.filePath,
-                line: call.line,
-              });
-            }
+            targetEntry.calledBy.push({
+              caller: callerId,
+              callerName: callerRecord.name,
+              file: callerRecord.filePath,
+              line: call.line,
+            });
           }
         }
       }

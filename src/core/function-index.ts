@@ -2,10 +2,9 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type {
   IFunctionIndexReader, IFunctionIndexWriter, ILanguageParser,
-  IRecordStore, IStalenessChecker, Config,
+  IRecordStore, IStalenessChecker, IDocstringParser, Config,
 } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
-import { DocstringParser } from "./docstring-parser.js";
 import { readFile, computeModule, detectLanguage } from "../utils/file-utils.js";
 import { globSourceFiles } from "../utils/file-utils.js";
 
@@ -21,7 +20,7 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     private parsers: ILanguageParser[],
     private recordStore: IRecordStore,
     private stalenessChecker: IStalenessChecker,
-    private docstringParser: DocstringParser,
+    private docstringParser: IDocstringParser,
     private config: Config,
     public readonly projectRoot: string,
   ) {}

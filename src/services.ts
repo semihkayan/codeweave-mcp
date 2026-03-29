@@ -14,9 +14,10 @@ import { RRFMerger } from "./core/search/rrf-merger.js";
 import { HybridSearchPipeline } from "./core/search/hybrid-pipeline.js";
 import { TypeGraphManager } from "./core/type-graph/type-graph.js";
 import { FileWatcher } from "./core/watcher/file-watcher.js";
-import { reembedFunctions } from "./core/reembed.js";
+import { ReindexOrchestrator } from "./core/reindex-orchestrator.js";
 import { detectWorkspaces } from "./core/workspace-detector.js";
 import { loadConfig } from "./utils/config.js";
+import { GitService } from "./utils/git-utils.js";
 import { logger } from "./utils/logger.js";
 
 export async function createServices(projectRoot?: string): Promise<AppContext> {
@@ -37,9 +38,10 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     config.embedding.instruction,
   );
   const merger = new RRFMerger(config.search.rrfK);
-  // File watcher — workspace-aware reindex callback
+  const reindexOrchestrator = new ReindexOrchestrator(embedding, parsers, config);
+
+  // File watcher — routes files to correct workspace, delegates to orchestrator
   const watcher = new FileWatcher(config, async (changedFiles: string[]) => {
-    // Route files to correct workspace
     const filesByWorkspace = new Map<string, string[]>();
     for (const file of changedFiles) {
       const relPath = path.relative(config.projectRoot, file);
@@ -51,51 +53,7 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     for (const [wsPath, files] of filesByWorkspace) {
       const ws = workspaces.get(wsPath);
       if (!ws) continue;
-
-      // Capture old IDs before update (for vector cleanup of deleted functions)
-      const oldIds: string[] = [];
-      for (const file of files) {
-        const relPath = path.relative(ws.projectRoot, file);
-        oldIds.push(...ws.index.getFileRecordIds(relPath));
-      }
-
-      const changedIds = await ws.indexWriter.updateFiles(files);
-      if (changedIds.length === 0 && oldIds.length === 0) continue;
-
-      // Clean up vectors for deleted functions (old IDs not in changed IDs = deleted)
-      const deletedIds = oldIds.filter(id => !changedIds.includes(id) && !ws.index.getById(id));
-      if (deletedIds.length > 0) {
-        await ws.vectorDb.deleteByIds(deletedIds);
-      }
-
-      // Re-embed changed functions
-      try {
-        if (await embedding.isAvailable()) {
-          await reembedFunctions(changedIds, ws.index, embedding, ws.vectorDb, config);
-        }
-      } catch (err) {
-        logger.warn({ err }, "Watcher re-embed failed");
-      }
-
-      // Incremental rebuild call graph + type graph for affected files only
-      const affectedFiles = Array.from(new Set(
-        changedIds.map(id => ws.index.getById(id)?.filePath).filter(Boolean) as string[]
-      ));
-      for (const f of affectedFiles) {
-        ws.callGraphWriter.removeByFile(f, ws.index);
-        ws.typeGraphWriter.removeByFile(f);
-      }
-      await ws.callGraphWriter.buildForFiles(affectedFiles, ws.index, ws.projectRoot);
-      await ws.typeGraphWriter.buildForFiles(affectedFiles, ws.index, parsers, ws.projectRoot);
-      await ws.indexWriter.saveToDisk();
-
-      const graphCacheDir = wsPath === "."
-        ? path.join(config.projectRoot, ".code-context")
-        : path.join(config.projectRoot, ".code-context", wsPath);
-      await ws.callGraphWriter.saveToDisk(graphCacheDir, ws.index);
-      await ws.typeGraphWriter.saveToDisk(graphCacheDir, ws.index);
-
-      logger.info({ workspace: wsPath, functions: changedIds.length, files: files.length }, "Watcher reindex complete");
+      await reindexOrchestrator.handleFileChanges(ws, wsPath, files);
     }
   });
 
@@ -115,7 +73,7 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
 
     // Vector DB + Search pipeline — real implementation
     const lanceStore = new LanceDBStore();
-    const searchPipeline = new HybridSearchPipeline(lanceStore, lanceStore, merger, embedding, functionIndex);
+    const searchPipeline = new HybridSearchPipeline(lanceStore, lanceStore, merger, embedding);
 
     // Call graph — real implementation
     const importResolver = new ImportResolver(parsers);
@@ -160,6 +118,8 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     embeddingAvailable: await embedding.isAvailable(),
     parsers,
     watcher,
+    git: new GitService(),
+    reindex: reindexOrchestrator,
     ready: false,
     async shutdown() {
       logger.info("Shutting down...");

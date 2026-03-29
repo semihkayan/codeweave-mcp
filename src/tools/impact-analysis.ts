@@ -36,50 +36,37 @@ export async function handleImpactAnalysis(
   // Type graph impact
   const typeImpact: any[] = [];
 
-  // Check if this function belongs to a class/interface with type relationships
-  if (record.typeRelationships) {
-    // If this class implements an interface and the interface changes
-    for (const impl of record.typeRelationships.implements) {
-      const implementors = ws.typeGraph.getImplementors(impl);
-      if (implementors.length > 0) {
-        typeImpact.push({
-          type: impl,
-          relationship: "implements",
-          affected: implementors.map(id => ws.index.getById(id)?.name || id),
-          risk: changeType === "signature" ? "high" : "medium",
-        });
-      }
-    }
-  }
+  // Check if this is a class/interface — who implements/extends/uses it?
+  if (record.kind === "class" || record.kind === "interface") {
+    const typeName = record.name.split(".").pop()!;
 
-  // Check if this is a class — who implements/extends it?
-  if (record.kind === "class") {
-    const className = record.name.split(".").pop()!;
-
-    const implementors = ws.typeGraph.getImplementors(className);
+    const implementors = ws.typeGraph.getImplementors(typeName)
+      .filter(id => id !== record.id);
     if (implementors.length > 0) {
       typeImpact.push({
-        type: className,
+        type: typeName,
         relationship: "implementors",
         affected: implementors.map(id => ws.index.getById(id)?.name || id),
         risk: changeType === "signature" ? "high" : "medium",
       });
     }
 
-    const extenders = ws.typeGraph.getExtenders(className);
+    const extenders = ws.typeGraph.getExtenders(typeName)
+      .filter(id => id !== record.id);
     if (extenders.length > 0) {
       typeImpact.push({
-        type: className,
+        type: typeName,
         relationship: "extenders",
         affected: extenders.map(id => ws.index.getById(id)?.name || id),
         risk: changeType === "signature" ? "high" : "medium",
       });
     }
 
-    const usages = ws.typeGraph.getUsages(className);
+    const usages = ws.typeGraph.getUsages(typeName)
+      .filter(id => id !== record.id);
     if (usages.length > 0) {
       typeImpact.push({
-        type: className,
+        type: typeName,
         relationship: "usedBy",
         affected: usages.map(id => ws.index.getById(id)?.name || id),
         risk: "medium",

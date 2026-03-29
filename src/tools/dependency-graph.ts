@@ -20,60 +20,73 @@ export async function handleDependencyGraph(
     const down = ws.callGraph.getTransitive(record.id, "downstream", maxDepth);
     const up = ws.callGraph.getTransitive(record.id, "upstream", maxDepth);
 
-    const allNodes = [...down.nodes, ...up.nodes];
+    // Deduplicate nodes by ID, track direction
+    const downIds = new Set(down.nodes.map(n => n.id));
+    const upIds = new Set(up.nodes.map(n => n.id));
+    const nodeMap = new Map<string, { id: string; depth: number; direction: string }>();
+    for (const n of down.nodes) {
+      nodeMap.set(n.id, { id: n.id, depth: n.depth, direction: upIds.has(n.id) ? "both" : "downstream" });
+    }
+    for (const n of up.nodes) {
+      if (!nodeMap.has(n.id)) {
+        nodeMap.set(n.id, { id: n.id, depth: n.depth, direction: "upstream" });
+      }
+    }
+    const dedupedNodes = Array.from(nodeMap.values());
     const allEdges = buildEdges(record.id, down.nodes, up.nodes, ws);
 
     return textResponse({
       root: record.name,
       direction: "both",
-      nodes: allNodes.map(n => {
+      nodes: dedupedNodes.map(n => {
         const r = ws.index.getById(n.id);
-        return { id: n.id, name: r?.name || n.id, depth: n.depth, direction: down.nodes.includes(n) ? "downstream" : "upstream" };
+        return { id: n.id, name: r?.name || n.id, depth: n.depth, direction: n.direction };
       }),
       edges: allEdges,
       cycles: [...down.cycles, ...up.cycles],
-      max_depth_reached: allNodes.some(n => n.depth >= maxDepth),
+      max_depth_reached: dedupedNodes.some(n => n.depth >= maxDepth),
       caveat: "Static analysis only. Dynamic dispatch and callbacks not captured.",
     });
   }
 
   const result = ws.callGraph.getTransitive(record.id, direction, maxDepth);
 
-  // Build edges from traversal
+  // Build edges from traversal (include root node)
+  const allNodeIds = new Set([record.id, ...result.nodes.map(n => n.id)]);
   const edges: Array<{ from: string; to: string }> = [];
-  for (const node of result.nodes) {
-    const entry = ws.callGraph.getEntry(node.id);
+
+  for (const nodeId of allNodeIds) {
+    const entry = ws.callGraph.getEntry(nodeId);
     if (!entry) continue;
 
     if (direction === "downstream") {
       for (const call of entry.calls) {
-        if (call.resolvedId && result.nodes.some(n => n.id === call.resolvedId)) {
-          edges.push({ from: node.id, to: call.resolvedId });
+        if (call.resolvedId && allNodeIds.has(call.resolvedId)) {
+          edges.push({ from: nodeId, to: call.resolvedId });
         }
       }
     } else {
       for (const caller of entry.calledBy) {
-        if (result.nodes.some(n => n.id === caller.caller)) {
-          edges.push({ from: caller.caller, to: node.id });
+        if (allNodeIds.has(caller.caller)) {
+          edges.push({ from: caller.caller, to: nodeId });
         }
       }
     }
   }
-  // Add root edges
-  const rootEntry = ws.callGraph.getEntry(record.id);
-  if (rootEntry && direction === "downstream") {
-    for (const call of rootEntry.calls) {
-      if (call.resolvedId) edges.push({ from: record.id, to: call.resolvedId });
-    }
-  }
+
+  // Include root node (depth 0) so edges don't have dangling references
+  const allNodes = [
+    { id: record.id, name: record.name, depth: 0 },
+    ...result.nodes.map(n => {
+      const r = ws.index.getById(n.id);
+      return { id: n.id, name: r?.name || n.id, depth: n.depth };
+    }),
+  ];
 
   return textResponse({
     root: record.name,
     direction,
-    nodes: result.nodes.map(n => {
-      const r = ws.index.getById(n.id);
-      return { id: n.id, name: r?.name || n.id, depth: n.depth };
-    }),
+    nodes: allNodes,
     edges,
     cycles: result.cycles,
     max_depth_reached: result.nodes.some(n => n.depth >= maxDepth),

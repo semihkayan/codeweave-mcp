@@ -151,6 +151,20 @@ export interface IImportResolver {
   resolveImports(source: string, filePath: string, projectRoot: string): ImportMap;
 }
 
+// === Docstring Parsing ===
+
+export interface IDocstringParser {
+  parse(raw: string, kind: "function" | "method" | "class"): ParsedDocstring;
+}
+
+// === Git Service ===
+
+export interface IGitService {
+  getChangedFiles(projectRoot: string, since?: string): Promise<Array<{ filePath: string; changeType: "added" | "modified" | "deleted" | "renamed" }>>;
+  getRecentCommits(projectRoot: string, since?: string): Promise<Array<{ hash: string; message: string; date: string; author: string; files: string[] }>>;
+  isGitRepo(projectRoot: string): Promise<boolean>;
+}
+
 // === Persistence ===
 
 export interface IRecordStore {
@@ -174,6 +188,26 @@ export interface IFileWatcher {
   stop(): void;
   readonly isRunning: boolean;
   notifyChanges(filePaths: string[]): void;
+}
+
+// === Reindex Orchestrator ===
+
+export interface ReindexResult {
+  mode: string;
+  changedFunctions: number;
+  embedded: number;
+  elapsedMs: number;
+}
+
+export interface IReindexOrchestrator {
+  /** Full rebuild: re-parse all files, re-embed, rebuild graphs */
+  reindexFull(ws: WorkspaceServices, wsPath: string): Promise<ReindexResult>;
+  /** Incremental: check for stale files, update only changed */
+  reindexIncremental(ws: WorkspaceServices, wsPath: string): Promise<ReindexResult>;
+  /** Specific files only */
+  reindexFiles(ws: WorkspaceServices, wsPath: string, files: string[]): Promise<ReindexResult>;
+  /** Handle file watcher changes (optimized incremental path) */
+  handleFileChanges(ws: WorkspaceServices, wsPath: string, changedFiles: string[]): Promise<void>;
 }
 
 // === Workspace Services (per-workspace isolated) ===
@@ -202,6 +236,8 @@ export interface AppContext {
   readonly embeddingAvailable: boolean;
   readonly parsers: ILanguageParser[];
   readonly watcher: IFileWatcher;
+  readonly git: IGitService;
+  readonly reindex: IReindexOrchestrator;
   ready: boolean;
   shutdown(): Promise<void>;
 }

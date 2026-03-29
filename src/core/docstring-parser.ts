@@ -1,6 +1,7 @@
 import type { ParsedDocstring } from "../types/index.js";
+import type { IDocstringParser } from "../types/interfaces.js";
 
-export class DocstringParser {
+export class DocstringParser implements IDocstringParser {
   parse(raw: string, kind: "function" | "method" | "class"): ParsedDocstring {
     return {
       raw,

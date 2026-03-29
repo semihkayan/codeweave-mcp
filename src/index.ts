@@ -121,6 +121,7 @@ async function main() {
     await ws.indexWriter.loadFromDisk();
 
     const stats = ws.index.getStats();
+    let staleIds: string[] = [];
     if (stats.files === 0) {
       logger.info({ workspace: wsPath }, "Empty index, building...");
       await ws.indexWriter.buildFull(ws.projectRoot);
@@ -130,7 +131,7 @@ async function main() {
     } else {
       logger.info({ workspace: wsPath, ...stats }, "Index loaded from cache");
       // Check for files changed while server was offline
-      const staleIds = await ws.indexWriter.refreshStale(ws.projectRoot);
+      staleIds = await ws.indexWriter.refreshStale(ws.projectRoot);
       if (staleIds.length > 0) {
         await ws.indexWriter.saveToDisk();
         logger.info({ workspace: wsPath, updated: staleIds.length }, "Stale files refreshed");
@@ -151,6 +152,17 @@ async function main() {
       await reembedFunctions(allIds, ws.index, services.embedding, ws.vectorDb, services.config);
       const newCount = await ws.vectorDb.countRows();
       logger.info({ workspace: wsPath, embedded: newCount }, "Embedding complete");
+    } else if (services.embeddingAvailable && staleIds.length > 0) {
+      // Re-embed stale functions + clean orphan vectors for deleted ones
+      const deletedIds = staleIds.filter(id => !ws.index.getById(id));
+      const changedIds = staleIds.filter(id => ws.index.getById(id));
+      if (deletedIds.length > 0) {
+        await ws.vectorDb.deleteByIds(deletedIds);
+      }
+      if (changedIds.length > 0) {
+        await reembedFunctions(changedIds, ws.index, services.embedding, ws.vectorDb, services.config);
+      }
+      logger.info({ workspace: wsPath, reembedded: changedIds.length, deleted: deletedIds.length }, "Stale vectors updated");
     }
 
     // Load or build call graph + type graph
