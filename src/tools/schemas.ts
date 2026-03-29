@@ -40,14 +40,6 @@ export const CallersSchema = z.object({
   module: z.string().optional().describe("Disambiguate when multiple functions share the same name"),
 });
 
-export const DependencyGraphSchema = z.object({
-  function: z.string().min(1).describe("Root function to start traversal from"),
-  workspace,
-  module: z.string().optional().describe("Disambiguate when multiple functions share the same name"),
-  direction: z.enum(["downstream", "upstream", "both"]).default("downstream").describe("Traversal direction: 'downstream' = what this function calls (default), 'upstream' = what calls this function, 'both' = full picture"),
-  max_depth: z.number().int().min(1).max(10).default(5).describe("Maximum levels to traverse (1-10, default 5). Higher = more complete but larger result."),
-});
-
 export const ImpactAnalysisSchema = z.object({
   function: z.string().min(1).describe("Function you plan to change"),
   workspace,
@@ -55,23 +47,11 @@ export const ImpactAnalysisSchema = z.object({
   change_type: z.enum(["signature", "behavior", "removal"]).default("behavior").describe("Type of planned change: 'signature' (param/return type change — highest impact), 'behavior' (internal logic change — default), 'removal' (deleting the function)"),
 });
 
-export const TagSearchSchema = z.object({
-  tags: z.array(z.string()).min(1).describe("Tags to search for (e.g., ['payment', 'stripe'] or ['auth', 'jwt'])"),
-  workspace,
-  match_mode: z.enum(["any", "all"]).default("any").describe("'any' = match functions with ANY of the tags (default), 'all' = match only functions with ALL tags"),
-});
-
 export const FileStructureSchema = z.object({
   workspace,
   depth: z.number().int().min(1).max(10).default(2).describe("How many directory levels deep to show (1-10, default 2)"),
   path: z.string().default(".").describe("Start from a subdirectory instead of project root (e.g., 'src/features'). Default: '.'"),
   include_stats: z.boolean().default(true).describe("Include function/class counts per directory and file (default: true)"),
-});
-
-export const RecentChangesSchema = z.object({
-  workspace,
-  since: z.string().default("HEAD~5").describe("Git ref to compare from (default: 'HEAD~5'). Examples: 'HEAD~10', 'main', 'v1.2.0', '3 days ago'"),
-  scope: z.string().optional().describe("Only show changes in this directory (e.g., 'payments')"),
 });
 
 export const StaleDocstringsSchema = z.object({

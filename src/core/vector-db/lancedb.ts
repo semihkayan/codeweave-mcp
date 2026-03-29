@@ -76,7 +76,10 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
       const where = this.buildWhereClause(filter);
       if (where) q = q.where(where);
       const rows = await q.toArray();
-      return rows.map((row: any, rank: number) => ({ id: row.id, row, score: rank }));
+      return rows.map((row: any, rank: number) => ({
+        id: row.id, row, score: rank,
+        distance: row._distance as number | undefined,
+      }));
     } catch {
       return [];
     }
@@ -89,7 +92,10 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
       const where = this.buildWhereClause(filter);
       if (where) q = q.where(where);
       const rows = await q.toArray();
-      return rows.map((row: any, rank: number) => ({ id: row.id, row, score: rank }));
+      return rows.map((row: any, rank: number) => ({
+        id: row.id, row, score: rank,
+        distance: row._score as number | undefined,
+      }));
     } catch {
       return [];
     }
@@ -98,12 +104,14 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
   async searchByExactName(name: string, scope?: string): Promise<RankedResult[]> {
     if (!this.table) return [];
     try {
-      let where = `name = '${escapeSql(name)}'`;
+      const escaped = escapeSql(name);
+      // Match both full name ("resolveViaTypeGraph") and class.method ("CallGraphManager.resolveViaTypeGraph")
+      let where = `(name = '${escaped}' OR name LIKE '%.${escaped}')`;
       if (scope) {
         const s = escapeSql(scope);
         where += ` AND (module = '${s}' OR module LIKE '${s}/%')`;
       }
-      const rows = await this.table.filter(where).limit(10).toArray();
+      const rows = await this.table.query().where(where).limit(10).toArray();
       return rows.map((row: any) => ({ id: row.id, row, score: 0 }));
     } catch {
       return [];

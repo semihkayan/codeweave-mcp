@@ -9,23 +9,20 @@ import { logger } from "./utils/logger.js";
 // Schemas
 import {
   SemanticSearchSchema, ModuleSummarySchema, FunctionSourceSchema, FileStructureSchema,
-  TagSearchSchema, IndexStatusSchema,
-  DependenciesSchema, CallersSchema, DependencyGraphSchema, ImpactAnalysisSchema,
-  RecentChangesSchema, StaleDocstringsSchema, ReindexSchema,
+  IndexStatusSchema,
+  DependenciesSchema, CallersSchema, ImpactAnalysisSchema,
+  StaleDocstringsSchema, ReindexSchema,
 } from "./tools/schemas.js";
 
 // Handlers
 import { handleModuleSummary } from "./tools/module-summary.js";
 import { handleFunctionSource } from "./tools/function-source.js";
 import { handleFileStructure } from "./tools/file-structure.js";
-import { handleTagSearch } from "./tools/tag-search.js";
 import { handleIndexStatus } from "./tools/index-status.js";
 import { handleSemanticSearch } from "./tools/semantic-search.js";
 import { handleDependencies } from "./tools/dependencies.js";
 import { handleCallers } from "./tools/callers.js";
-import { handleDependencyGraph } from "./tools/dependency-graph.js";
 import { handleImpactAnalysis } from "./tools/impact-analysis.js";
-import { handleRecentChanges } from "./tools/recent-changes.js";
 import { handleStaleDocstrings } from "./tools/stale-docstrings.js";
 import { handleReindex } from "./tools/reindex.js";
 
@@ -57,11 +54,6 @@ async function main() {
     inputSchema: FileStructureSchema.shape,
   }, (args) => handleFileStructure(args as any, ctx));
 
-  server.registerTool("search_by_tags", {
-    description: "Find functions by their @tags annotations. Use when you know the domain concept (e.g., 'payment', 'auth', 'cache'). Returns empty if codebase has no @tags docstring annotations.",
-    inputSchema: TagSearchSchema.shape,
-  }, (args) => handleTagSearch(args as any, ctx));
-
   server.registerTool("get_dependencies", {
     description: "Show what a function calls — its forward dependencies. Cross-validates AST analysis with @deps docstring annotations. Categorizes each dependency as confirmed (AST+docstring), AST-only, docstring-only, or unresolved.",
     inputSchema: DependenciesSchema.shape,
@@ -72,20 +64,10 @@ async function main() {
     inputSchema: CallersSchema.shape,
   }, (args) => handleCallers(args as any, ctx));
 
-  server.registerTool("get_dependency_graph", {
-    description: "Visualize the full dependency tree of a function — what it calls, what those call, etc. Supports downstream (callees), upstream (callers), or both directions. Detects circular dependencies.",
-    inputSchema: DependencyGraphSchema.shape,
-  }, (args) => handleDependencyGraph(args as any, ctx));
-
   server.registerTool("get_impact_analysis", {
     description: "Assess the blast radius of changing a function. Use BEFORE refactoring or modifying signatures. Combines call graph + type graph to find all affected code. Returns risk levels: high (direct callers + signature change), medium (indirect), low (transitive).",
     inputSchema: ImpactAnalysisSchema.shape,
   }, (args) => handleImpactAnalysis(args as any, ctx));
-
-  server.registerTool("get_recent_changes", {
-    description: "Show recent git changes mapped to function level. See which functions were added, modified, or deleted in recent commits.",
-    inputSchema: RecentChangesSchema.shape,
-  }, (args) => handleRecentChanges(args as any, ctx));
 
   server.registerTool("get_stale_docstrings", {
     description: "Find functions with missing or outdated docstrings. Detects: missing docstrings, @deps that don't match actual AST calls, missing @tags. Use for codebase hygiene.",

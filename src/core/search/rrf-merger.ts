@@ -1,11 +1,24 @@
 import type { IResultMerger } from "../../types/interfaces.js";
 import type { RankedResult, SearchResult, VectorRow } from "../../types/index.js";
 
+/**
+ * Convert LanceDB L2 distance (on normalized vectors) to cosine similarity [0, 1].
+ * For normalized vectors: L2_distance = 2 * (1 - cosine_similarity)
+ */
+function distanceToSimilarity(distance: number): number {
+  return Math.max(0, Math.min(1, 1 - distance / 2));
+}
+
 export class RRFMerger implements IResultMerger {
   constructor(private k: number = 60) {}
 
   merge(rankedLists: RankedResult[][], topK: number): SearchResult[] {
-    const scoreMap = new Map<string, { score: number; row: VectorRow; listCount: number }>();
+    const scoreMap = new Map<string, {
+      rrfScore: number;
+      row: VectorRow;
+      listCount: number;
+      bestDistance: number | undefined;
+    }>();
 
     for (const list of rankedLists) {
       for (let rank = 0; rank < list.length; rank++) {
@@ -13,32 +26,46 @@ export class RRFMerger implements IResultMerger {
         const rrfScore = 1 / (this.k + rank + 1);
         const existing = scoreMap.get(item.id);
         if (existing) {
-          existing.score += rrfScore;
+          existing.rrfScore += rrfScore;
           existing.listCount++;
+          if (item.distance != null && (existing.bestDistance == null || item.distance < existing.bestDistance)) {
+            existing.bestDistance = item.distance;
+          }
         } else {
-          scoreMap.set(item.id, { score: rrfScore, row: item.row, listCount: 1 });
+          scoreMap.set(item.id, {
+            rrfScore,
+            row: item.row,
+            listCount: 1,
+            bestDistance: item.distance,
+          });
         }
       }
     }
 
-    const sorted = Array.from(scoreMap.values()).sort((a, b) => b.score - a.score);
+    // Sort by RRF score (ordering — RRF is good at this)
+    const sorted = Array.from(scoreMap.values()).sort((a, b) => b.rrfScore - a.rrfScore);
     if (sorted.length === 0) return [];
 
-    // RRF scores: use raw scores (higher = better match).
-    // Max possible per-list score is 1/(k+1). With 2 lists, max = 2/(k+1).
-    // Normalize relative to theoretical max, not relative to best result.
-    // This way, weak results get low scores even if they're the "best" in a bad set.
+    // For display scores: use actual vector distance when available (meaningful similarity),
+    // fall back to RRF-derived score for FTS-only results.
     const theoreticalMax = rankedLists.length / (this.k + 1);
 
     return sorted
       .slice(0, topK)
       .map(entry => {
-        const normalized = Math.min(1, entry.score / theoreticalMax);
-        // Bonus for appearing in multiple search sources (vector + FTS agree)
-        const listBonus = entry.listCount > 1 ? 0.05 : 0;
-        const finalScore = Math.min(1, normalized + listBonus);
+        let displayScore: number;
 
-        return this.toSearchResult(entry.row, Math.round(finalScore * 1000) / 1000);
+        if (entry.bestDistance != null) {
+          // Actual cosine similarity from vector search — honest, meaningful score
+          displayScore = distanceToSimilarity(entry.bestDistance);
+        } else {
+          // FTS-only result — use RRF normalized score as fallback
+          const normalized = Math.min(1, entry.rrfScore / theoreticalMax);
+          const bonus = entry.listCount > 1 ? 0.05 : 0;
+          displayScore = Math.min(1, normalized + bonus);
+        }
+
+        return this.toSearchResult(entry.row, Math.round(displayScore * 1000) / 1000);
       });
   }
 

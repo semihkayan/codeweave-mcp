@@ -22,6 +22,13 @@ async function main() {
   const noEmbed = args.includes("--no-embed");
 
   const resolvedRoot = path.resolve(projectRoot);
+
+  // Warn if MCP server might be running — concurrent access to LanceDB causes corruption
+  if (force) {
+    console.log("⚠  Stop the MCP server before running --force (it shares the LanceDB).");
+    console.log("   For live reindexing while the server runs, use the 'reindex' MCP tool instead.\n");
+  }
+
   const config = await loadConfig(resolvedRoot);
   const parsers = createTreeSitterParsers(config.parser);
   const docstringParser = new DocstringParser();
@@ -61,13 +68,15 @@ async function main() {
       if (await embedding.isAvailable()) {
         const lancePath = path.join(resolvedRoot, ".code-context", "lance");
         const tableName = wsPath === "." ? "functions" : `${wsPath}_functions`;
+
+        // Force mode: delete entire lance directory to eliminate stale data and corrupted deletion logs
+        if (force) {
+          const { rmSync } = await import("node:fs");
+          try { rmSync(lancePath, { recursive: true, force: true }); } catch { /* may not exist */ }
+        }
+
         const lanceStore = new LanceDBStore();
         await lanceStore.initialize(lancePath, tableName);
-
-        // Force mode: drop old vectors to eliminate stale entries (e.g., deleted/ignored files)
-        if (force) {
-          await lanceStore.dropTable();
-        }
 
         const allIds = index.getAllFilePaths().flatMap(fp => index.getFileRecordIds(fp));
         console.log(`[${wsPath}] Embedding ${allIds.length} functions...`);

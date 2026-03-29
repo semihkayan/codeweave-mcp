@@ -69,7 +69,17 @@ export class HybridSearchPipeline implements ISearchPipeline {
       ? this.merger.merge(rankedLists, topK)
       : [];
 
-    // Step 6: Prepend exact matches (deduplicated)
+    // Step 6: Boost exact matches — whether they're already in merged or not
+    const exactIds = new Set(exactMatches.map(r => r.id));
+
+    // Boost merged results that are exact name matches (ensure they rise to the top)
+    for (const r of merged) {
+      if (exactIds.has(r.id)) {
+        r.score = Math.max(r.score, 0.95);
+      }
+    }
+
+    // Add exact matches not in merged results (FTS/vector didn't find them)
     const mergedIds = new Set(merged.map(r => r.id));
     const exactToAdd: SearchResult[] = exactMatches
       .filter(r => !mergedIds.has(r.id))
@@ -84,6 +94,9 @@ export class HybridSearchPipeline implements ISearchPipeline {
         score: 1.0,
       }));
 
-    return [...exactToAdd, ...merged].slice(0, topK);
+    // Re-sort: exact matches first, then by score
+    const combined = [...exactToAdd, ...merged];
+    combined.sort((a, b) => b.score - a.score);
+    return combined.slice(0, topK);
   }
 }

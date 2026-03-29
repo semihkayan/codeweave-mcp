@@ -48,11 +48,17 @@ export async function handleSemanticSearch(
   const ws = resolved.ws;
 
   const topK = args.top_k ?? 10;
+  const query = args.query.trim();
+
+  // Reject queries too short to be meaningful for semantic search
+  if (query.length < 2) {
+    return textResponse({ results: [], total_indexed: 0, search_mode: "skipped", note: "Query too short. Use at least 2 characters." });
+  }
 
   // Fetch extra to compensate for filtering, then trim
   const fetchK = topK + 5;
   const rawResults = await ws.search.search(
-    { text: args.query },
+    { text: query },
     {
       topK: fetchK,
       scope: args.scope,
@@ -61,9 +67,15 @@ export async function handleSemanticSearch(
     }
   );
 
-  // Filter out build artifacts and declaration files (stale vectors or accidental indexing)
+  // Filter out build artifacts, test fixtures, declaration files, and low-relevance noise
+  const MIN_SCORE = 0.4;
   const results = rawResults
-    .filter(r => !r.filePath.startsWith("dist/") && !r.filePath.endsWith(".d.ts"))
+    .filter(r =>
+      !r.filePath.startsWith("dist/") &&
+      !r.filePath.startsWith("test/fixtures/") &&
+      !r.filePath.endsWith(".d.ts")
+    )
+    .filter(r => r.score >= MIN_SCORE)
     .slice(0, topK);
 
   // Enrich with line numbers and auto-summary from AST index

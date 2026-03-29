@@ -21,9 +21,9 @@ Single-process Node.js MCP server. stdout is reserved for MCP protocol — never
 ### Layers
 
 ```
-index.ts             → MCP shell: registerTool × 13, transport, shutdown
+index.ts             → MCP shell: registerTool × 10, transport, shutdown
 services.ts          → Composition root: ALL concrete instantiation here
-tools/               → 13 tool handlers (thin orchestrators, interface-only deps)
+tools/               → 10 tool handlers (thin orchestrators, interface-only deps)
 core/                → Business logic behind interfaces
 parsers/             → 7 language parsers (tree-sitter wrappers)
 utils/               → Config, file I/O, git, logging, SQL escape
@@ -101,3 +101,5 @@ export async function handleToolName(args: { ... }, ctx: AppContext) {
 - **LanceDB tag filtering** — delimiter format `",tag1,tag2,"` with `LIKE '%,tag1,%'` for exact match. Without leading/trailing commas, `LIKE '%pay%'` false-matches `payment`.
 - **LanceDB vectors** — `Float32Array` must be converted to regular arrays before storage.
 - **Embedding failures** — failed batches are skipped (not zero-filled). Unembedded functions get retried on next reindex.
+- **LanceDB concurrent access** — `graph-init --force` and the MCP server must not run simultaneously. Both write to `.code-context/lance/`. Use the `reindex` MCP tool for live reindexing while the server runs. `graph-init` is for initial setup or recovery with the server stopped.
+- **LanceDB query API** — use `table.query().where(filter)` not `table.filter(filter)` (removed in newer versions). Always try/catch.

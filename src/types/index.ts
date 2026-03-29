@@ -123,6 +123,7 @@ export interface RankedResult {
   id: string;
   row: VectorRow;
   score: number;
+  distance?: number;  // Raw vector distance from LanceDB (lower = more similar)
 }
 
 export interface SearchFilter {
