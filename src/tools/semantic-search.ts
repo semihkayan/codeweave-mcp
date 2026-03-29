@@ -1,6 +1,7 @@
 import type { AppContext } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
 import { resolveWorkspaceOrError, textResponse } from "./tool-utils.js";
+import { applyDensityAdjustment } from "./density-scorer.js";
 
 /**
  * Generate a brief summary from function metadata when no docstring exists.
@@ -78,7 +79,7 @@ export async function handleSemanticSearch(
     .filter(r => r.score >= MIN_SCORE)
     .slice(0, topK);
 
-  // Enrich with line numbers and auto-summary from AST index
+  // Enrich with line numbers, auto-summary, and relevance adjustments
   const enriched = results.map(r => {
     const record = ws.index.getById(r.id);
     // Auto-summary: use docstring summary if available, else build from signature
@@ -93,11 +94,24 @@ export async function handleSemanticSearch(
       signature: r.signature,
       summary,
       tags: r.tags,
-      score: Math.round(r.score * 1000) / 1000,
+      score: r.score,
       line_start: record?.lineStart,
       line_end: record?.lineEnd,
+      record, // Temporarily attach for relevance adjustments
     };
   });
+
+  // Apply information density adjustments: demote low-info functions, boost high-info ones
+  applyDensityAdjustment(enriched, ws, ctx.config);
+
+  // Re-sort by adjusted score and drop results that fell below threshold
+  enriched.sort((a, b) => b.score - a.score);
+
+  // Clean up: remove internal record reference and round scores
+  for (const r of enriched) {
+    delete (r as any).record;
+    r.score = Math.round(r.score * 1000) / 1000;
+  }
 
   // Determine search mode
   const stats = ws.index.getStats();

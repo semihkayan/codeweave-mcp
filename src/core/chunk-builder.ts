@@ -11,7 +11,29 @@ export function buildChunk(record: FunctionRecord, config: ChunkConfig): string 
 
   parts.push(`Function: ${record.name}`);
   parts.push(`File: ${record.filePath}`);
+
+  // Module path provides domain context for embedding (e.g., "learning/domain/model")
+  if (record.module) {
+    parts.push(`Module: ${record.module}`);
+  }
+
   parts.push(`Signature: ${record.signature}`);
+
+  // Kind context helps embedding model distinguish domain models from services, etc.
+  if (record.kind === "class") {
+    const inheritsInfo = record.classInfo?.inherits?.length
+      ? ` extends ${record.classInfo.inherits.join(", ")}` : "";
+    const methodCount = record.classInfo?.methods?.length ?? 0;
+    parts.push(`Kind: class${inheritsInfo}, ${methodCount} methods`);
+  } else if (record.kind === "interface") {
+    parts.push(`Kind: interface`);
+  } else if (record.kind === "method") {
+    // Extract class name for method context
+    const className = record.name.split(".")[0];
+    if (className !== record.name) {
+      parts.push(`Class: ${className}`);
+    }
+  }
 
   if (record.docstring) {
     parts.push(`Description: ${record.docstring.raw}`);

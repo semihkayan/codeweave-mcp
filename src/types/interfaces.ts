@@ -270,6 +270,21 @@ export interface Config {
     rrfK: number;
     expandCamelCase: boolean;
     exactNameBoost: boolean;
+    density: {
+      enabled: boolean;
+      floor: number;
+      ceiling: number;
+      testFilePenalty: number;
+      weights: {
+        bodySize: number;
+        docstring: number;
+        docstringRichness: number;
+        paramCount: number;
+        centrality: number;
+        visibility: number;
+        kind: number;
+      };
+    };
   };
   indexing: {
     parallelWorkers: number;

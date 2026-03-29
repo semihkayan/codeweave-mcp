@@ -107,28 +107,47 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
   }
 
   // Arrow functions: const name = (...) => { ... }
+  // Also: factory-created hooks/components: const useStore = create<T>()((set) => {...})
   const lexDecls = walkNodes(rootNode, ["lexical_declaration"]);
   for (const decl of lexDecls) {
     const declarators = walkNodes(decl, ["variable_declarator"]);
     for (const vd of declarators) {
       const nameNode = vd.childForFieldName("name");
       const valueNode = vd.childForFieldName("value");
-      if (!nameNode || !valueNode || valueNode.type !== "arrow_function") continue;
+      if (!nameNode || !valueNode) continue;
 
       const name = nameNode.text;
       const isExported = decl.parent?.type === "export_statement";
       const outerNode = isExported ? decl.parent : decl;
-      results.push({
-        name,
-        kind: "function",
-        signature: buildSignature(name, getParams(valueNode), getReturnType(valueNode)),
-        lineStart: outerNode.startPosition.row + 1,
-        lineEnd: decl.endPosition.row + 1,
-        visibility: isExported ? "public" : "private",
-        isAsync: isAsync(valueNode),
-        docstring: getJSDoc(outerNode) || undefined,
-        paramTypes: extractParamTypes(valueNode),
-      });
+
+      if (valueNode.type === "arrow_function") {
+        // Direct arrow function: const name = (...) => { ... }
+        results.push({
+          name,
+          kind: "function",
+          signature: buildSignature(name, getParams(valueNode), getReturnType(valueNode)),
+          lineStart: outerNode.startPosition.row + 1,
+          lineEnd: decl.endPosition.row + 1,
+          visibility: isExported ? "public" : "private",
+          isAsync: isAsync(valueNode),
+          docstring: getJSDoc(outerNode) || undefined,
+          paramTypes: extractParamTypes(valueNode),
+        });
+      } else if (valueNode.type === "call_expression" && isExported) {
+        // Factory-created function: const useStore = create<T>()((set) => {...})
+        // Covers: zustand stores, React.memo, forwardRef, styled-components, etc.
+        // Only exported declarations — unexported call results are usually not callable.
+        results.push({
+          name,
+          kind: "function",
+          signature: `${name}()`,
+          lineStart: outerNode.startPosition.row + 1,
+          lineEnd: decl.endPosition.row + 1,
+          visibility: "public",
+          isAsync: false,
+          docstring: getJSDoc(outerNode) || undefined,
+        });
+      }
     }
   }
 

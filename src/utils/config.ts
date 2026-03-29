@@ -46,6 +46,21 @@ const ConfigSchema = z.object({
     rrfK: z.number().default(60),
     expandCamelCase: z.boolean().default(true),
     exactNameBoost: z.boolean().default(true),
+    density: z.object({
+      enabled: z.boolean().default(true),
+      floor: z.number().min(0).max(1).default(0.65),
+      ceiling: z.number().min(0.5).max(2).default(1.05),
+      testFilePenalty: z.number().min(0).max(1).default(0.90),
+      weights: z.object({
+        bodySize: z.number().default(0.35),
+        docstring: z.number().default(0.10),
+        docstringRichness: z.number().default(0.10),
+        paramCount: z.number().default(0.15),
+        centrality: z.number().default(0.15),
+        visibility: z.number().default(0.10),
+        kind: z.number().default(0.05),
+      }).default({}),
+    }).default({}),
   }).default({}),
   indexing: z.object({
     parallelWorkers: z.number().default(4),

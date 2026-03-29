@@ -1,10 +1,14 @@
 import type { AppContext } from "../types/interfaces.js";
-import { resolveWorkspaceOrError, textResponse } from "./tool-utils.js";
+import { resolveWorkspaceOrError, checkReady, textResponse } from "./tool-utils.js";
 
 export async function handleIndexStatus(
   args: { workspace?: string },
   ctx: AppContext
 ) {
+  // Ready check applies to all paths — including multi-workspace overview
+  const notReady = checkReady(ctx);
+  if (notReady) return notReady;
+
   if (args.workspace || !ctx.isMultiWorkspace) {
     const resolved = resolveWorkspaceOrError(ctx, args.workspace);
     if ("error" in resolved) return resolved.error;
