@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
+import ignore from "ignore";
 import type {
   IFunctionIndexReader, IFunctionIndexWriter, ILanguageParser,
   IRecordStore, IStalenessChecker, IDocstringParser, Config,
@@ -169,12 +170,22 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
   async loadFromDisk(): Promise<void> {
     const { records, hashes } = await this.recordStore.loadAll();
 
+    // Filter out records from ignored files (e.g., dist/ cached before ignore was added)
+    const ig = ignore.default().add(this.config.parser.ignore);
+    let ignoredCount = 0;
+
     // Deduplicate by ID and re-normalize module paths to match current sourceRoot config.
     // Cache may contain records from different config eras (e.g., before sourceRoot auto-detection).
     const seen = new Set<string>();
     for (const record of records) {
       if (seen.has(record.id)) continue;
       seen.add(record.id);
+
+      // Skip records from ignored files
+      if (ig.ignores(record.filePath)) {
+        ignoredCount++;
+        continue;
+      }
 
       // Re-compute module to match current sourceRoot config
       const correctModule = computeModule(record.filePath, "", this.config.parser.sourceRoot);
@@ -184,6 +195,14 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
 
       this.addRecord(record);
     }
+
+    // Clean hashes for ignored files so refreshStale doesn't process them
+    for (const [filePath] of hashes) {
+      if (ig.ignores(filePath)) {
+        hashes.delete(filePath);
+      }
+    }
+
     this.fileHashes = hashes;
   }
 

@@ -87,5 +87,26 @@ export async function loadConfig(projectRoot?: string): Promise<Config> {
     }
   }
 
+  // Merge .gitignore patterns into ignore list — if it's gitignored, the agent doesn't need it indexed
+  const gitignorePath = path.join(root, ".gitignore");
+  if (existsSync(gitignorePath)) {
+    try {
+      const content = await readFile(gitignorePath, "utf-8");
+      const patterns = content
+        .split("\n")
+        .map(line => line.trim())
+        .filter(line => line && !line.startsWith("#"));
+      // Deduplicate: only add patterns not already in the ignore list
+      const existing = new Set(config.parser.ignore);
+      for (const pattern of patterns) {
+        if (!existing.has(pattern)) {
+          config.parser.ignore.push(pattern);
+        }
+      }
+    } catch {
+      // .gitignore unreadable — skip silently
+    }
+  }
+
   return config;
 }

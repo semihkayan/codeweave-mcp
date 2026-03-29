@@ -5,6 +5,10 @@ import path from "node:path";
 import type { IRecordStore } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
 
+// Bump when parser behavior changes (e.g., visibility detection, new fields).
+// Old-version cache files are skipped on load → re-parsed by refreshStale → saved with new version.
+const AST_CACHE_VERSION = 2;
+
 export class JsonFileRecordStore implements IRecordStore {
   constructor(private cacheDir: string) {}
 
@@ -22,8 +26,11 @@ export class JsonFileRecordStore implements IRecordStore {
         const data = JSON.parse(content) as {
           filePath: string;
           fileHash: string;
+          version?: number;
           records: FunctionRecord[];
         };
+        // Skip old-version cache files — they'll be re-parsed by refreshStale
+        if (data.version !== AST_CACHE_VERSION) continue;
         records.push(...data.records);
         hashes.set(data.filePath, data.fileHash);
       } catch {
@@ -39,7 +46,7 @@ export class JsonFileRecordStore implements IRecordStore {
     const cacheFile = this.getCacheFileName(filePath);
     await writeFile(
       path.join(this.cacheDir, cacheFile),
-      JSON.stringify({ filePath, fileHash: hash, records }, null, 2)
+      JSON.stringify({ version: AST_CACHE_VERSION, filePath, fileHash: hash, records }, null, 2)
     );
   }
 

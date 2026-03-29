@@ -1,4 +1,6 @@
 import { watch, type FSWatcher } from "chokidar";
+import path from "node:path";
+import ignore from "ignore";
 import type { IFileWatcher, Config } from "../../types/interfaces.js";
 import { logger } from "../../utils/logger.js";
 
@@ -12,12 +14,14 @@ export class FileWatcher implements IFileWatcher {
   private flushQueued: boolean = false;
   private _isRunning: boolean = false;
   private supportedExtensions: string[];
+  private ignoreFilter: ReturnType<typeof ignore.default>;
 
   constructor(
     private config: Config,
     private onChanges: (filePaths: string[]) => Promise<void>,
   ) {
     this.supportedExtensions = Object.values(config.parser.languages).flat();
+    this.ignoreFilter = ignore.default().add(config.parser.ignore);
   }
 
   get isRunning(): boolean { return this._isRunning; }
@@ -117,6 +121,10 @@ export class FileWatcher implements IFileWatcher {
   }
 
   private isSupportedFile(filePath: string): boolean {
-    return this.supportedExtensions.some(ext => filePath.endsWith(ext));
+    if (!this.supportedExtensions.some(ext => filePath.endsWith(ext))) return false;
+    // Check ignore patterns (convert absolute path to project-relative for matching)
+    const relPath = path.relative(this.config.projectRoot, filePath);
+    if (this.ignoreFilter.ignores(relPath)) return false;
+    return true;
   }
 }
