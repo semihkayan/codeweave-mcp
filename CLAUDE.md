@@ -4,7 +4,7 @@
 
 MCP server that gives AI agents cheap, precise code understanding. Instead of dumping entire files into context, the agent queries local indexes (AST, call graph, type graph, vector search) and gets back only what it needs. All indexing is local and live — file watcher keeps everything current as code changes.
 
-Goal: agents work with code at lower token cost and higher quality. Every feature serves this.
+**Primary goal: AI agents should do higher-quality work on code, at lower cost.** Less token waste, more relevant context, better decisions. Every feature and improvement must serve this — if it doesn't help the agent work better or cheaper, it doesn't belong here.
 
 ## Build & Run
 
