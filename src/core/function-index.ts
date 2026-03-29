@@ -50,6 +50,19 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       }
     }
 
+    // Suffix fallback: agent queries "user" → matches "com/xxx/user" and sub-modules.
+    if (results.length === 0) {
+      const suffix = `/${module}`;
+      for (const [mod, ids] of this.moduleIndex) {
+        if (mod.endsWith(suffix) || mod.includes(`${suffix}/`)) {
+          for (const id of ids) {
+            const rec = this.records.get(id);
+            if (rec) results.push(rec);
+          }
+        }
+      }
+    }
+
     return results;
   }
 
