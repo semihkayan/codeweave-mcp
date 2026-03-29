@@ -6,65 +6,63 @@ export interface ChunkConfig {
   maxChunkTokens?: number;
 }
 
+/**
+ * Build a text chunk for embedding. Every token should carry semantic meaning.
+ * No labels, no file paths, no redundancy — just identity, signature, and content.
+ */
 export function buildChunk(record: FunctionRecord, config: ChunkConfig): string {
+  const expand = config.expandCamelCase ? expandIdentifiers : (s: string) => s;
   const parts: string[] = [];
 
-  parts.push(`Function: ${record.name}`);
-  parts.push(`File: ${record.filePath}`);
-
-  // Module path provides domain context for embedding (e.g., "learning/domain/model")
-  if (record.module) {
-    parts.push(`Module: ${record.module}`);
-  }
-
-  parts.push(`Signature: ${record.signature}`);
-
-  // Kind context helps embedding model distinguish domain models from services, etc.
   if (record.kind === "class") {
-    const inheritsInfo = record.classInfo?.inherits?.length
-      ? ` extends ${record.classInfo.inherits.join(", ")}` : "";
-    const methodCount = record.classInfo?.methods?.length ?? 0;
-    parts.push(`Kind: class${inheritsInfo}, ${methodCount} methods`);
-  } else if (record.kind === "interface") {
-    parts.push(`Kind: interface`);
-  } else if (record.kind === "method") {
-    // Extract class name for method context
-    const className = record.name.split(".")[0];
-    if (className !== record.name) {
-      parts.push(`Class: ${className}`);
+    // Class: name, inheritance, method names (expanded for keyword matching)
+    let classLine = `class ${expand(record.name)}`;
+    if (record.classInfo?.inherits?.length) {
+      classLine += `, extends ${record.classInfo.inherits.join(", ")}`;
     }
-  }
-
-  if (record.docstring) {
-    parts.push(`Description: ${record.docstring.raw}`);
-    if (record.docstring.tags.length > 0)
-      parts.push(`Tags: ${record.docstring.tags.join(", ")}`);
-    if (record.docstring.deps.length > 0)
-      parts.push(`Dependencies: ${record.docstring.deps.join(", ")}`);
-    if (record.docstring.sideEffects.length > 0)
-      parts.push(`Side effects: ${record.docstring.sideEffects.join(", ")}`);
+    if (record.classInfo?.methods?.length) {
+      const methods = record.classInfo.methods.map(m => expand(m)).join(", ");
+      classLine += `, ${record.classInfo.methods.length} methods: ${methods}`;
+    }
+    parts.push(classLine);
+  } else if (record.kind === "interface") {
+    parts.push(`interface ${expand(record.name)}`);
   } else {
-    // Docstring-free enrichment: extract from signature
-    const paramInfo = extractParamInfo(record.signature);
-    if (paramInfo) parts.push(`Parameters: ${paramInfo}`);
-    const returnInfo = extractReturnType(record.signature);
-    if (returnInfo) parts.push(`Returns: ${returnInfo}`);
+    // Function/method: expanded qualified name + raw signature
+    parts.push(expand(record.name));
+    parts.push(record.signature);
   }
 
-  // Expand identifiers ONLY in the function name and signature lines, not metadata
-  if (config.expandCamelCase) {
-    parts[0] = expandIdentifiers(parts[0]); // Function: name
-    if (parts.length > 2) parts[2] = expandIdentifiers(parts[2]); // Signature
+  // Docstring content (no labels — the content speaks for itself)
+  if (record.docstring) {
+    if (record.docstring.summary) {
+      parts.push(record.docstring.summary);
+    }
+    if (record.docstring.tags.length > 0) {
+      parts.push(record.docstring.tags.join(", "));
+    }
+    if (record.docstring.deps.length > 0) {
+      parts.push(`depends on: ${record.docstring.deps.join(", ")}`);
+    }
+    if (record.docstring.sideEffects.length > 0) {
+      parts.push(`effects: ${record.docstring.sideEffects.join(", ")}`);
+    }
+  } else if (record.kind !== "class" && record.kind !== "interface") {
+    // Docstring-free: extract param/return info from signature (no labels)
+    const paramInfo = extractParamInfo(record.signature);
+    if (paramInfo) parts.push(paramInfo);
+    const returnInfo = extractReturnType(record.signature);
+    if (returnInfo) parts.push(returnInfo);
   }
 
   let chunk = parts.join("\n");
-  if (config.maxChunkTokens && config.maxChunkTokens > 0) chunk = truncateToTokens(chunk, config.maxChunkTokens);
-
+  if (config.maxChunkTokens && config.maxChunkTokens > 0) {
+    chunk = truncateToTokens(chunk, config.maxChunkTokens);
+  }
   return chunk;
 }
 
 function extractParamInfo(signature: string): string | null {
-  // Find the outermost parentheses (handles nested generics like Map<string, number>)
   const openIdx = signature.indexOf("(");
   if (openIdx === -1) return null;
   let depth = 0;
@@ -82,10 +80,8 @@ function extractParamInfo(signature: string): string | null {
 }
 
 function extractReturnType(signature: string): string | null {
-  // Python: "name(params) -> Type"
   const pyMatch = signature.match(/\)\s*->\s*(.+)$/);
   if (pyMatch) return pyMatch[1].trim();
-  // TS: "name(params): Type"
   const tsMatch = signature.match(/\)\s*:\s*(.+)$/);
   if (tsMatch) return tsMatch[1].trim();
   return null;
@@ -93,6 +89,6 @@ function extractReturnType(signature: string): string | null {
 
 export function expandIdentifiers(text: string): string {
   return text
-    .replace(/([a-z])([A-Z])/g, "$1 $2")       // camelCase → camel Case
-    .replace(/_/g, " ");                          // snake_case → snake case
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ");
 }
