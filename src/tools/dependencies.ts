@@ -5,23 +5,34 @@ import { resolveWorkspaceOrError, resolveFunctionOrError, textResponse } from ".
 const NOISE_TARGETS = new Set([
   "print", "len", "range", "str", "int", "float", "bool", "list", "dict", "set", "tuple",
   "isinstance", "issubclass", "hasattr", "getattr", "setattr", "super", "type", "id", "hash",
-  "console.log", "console.error", "console.warn", "console.info",
+  "enumerate", "zip", "map", "filter", "sorted", "reversed", "max", "min", "sum", "any", "all",
+  "console.log", "console.error", "console.warn", "console.info", "console.debug",
   "JSON.parse", "JSON.stringify", "Object.keys", "Object.values", "Object.entries",
-  "Object.assign", "Array.from", "Array.isArray",
-  "Math.floor", "Math.ceil", "Math.round", "Math.max", "Math.min",
-  "fmt.Println", "fmt.Printf", "fmt.Sprintf", "fmt.Errorf",
+  "Object.assign", "Object.freeze", "Object.create", "Array.from", "Array.isArray",
+  "Math.floor", "Math.ceil", "Math.round", "Math.max", "Math.min", "Math.abs", "Math.random",
+  "Promise.all", "Promise.resolve", "Promise.reject", "Promise.allSettled",
+  "Date.now", "Number.parseInt", "Number.parseFloat", "String.fromCharCode",
+  "Set.has", "Map.has", "Map.get", "Map.set",
+  "fmt.Println", "fmt.Printf", "fmt.Sprintf", "fmt.Errorf", "fmt.Fprintf",
+  "errors.New", "errors.Is", "errors.As",
 ]);
 
 // Common JS/TS built-in methods that appear as unresolved calls
 const BUILTIN_METHODS = new Set([
+  // Array
   "map", "filter", "reduce", "forEach", "find", "some", "every", "includes",
   "push", "pop", "shift", "unshift", "slice", "splice", "concat", "flat", "flatMap",
-  "join", "sort", "reverse", "indexOf", "lastIndexOf", "entries", "values", "keys",
-  "has", "get", "set", "delete", "add", "clear", "size",
-  "trim", "split", "replace", "match", "startsWith", "endsWith", "includes",
-  "toString", "valueOf", "toJSON",
+  "join", "sort", "reverse", "indexOf", "lastIndexOf", "fill", "copyWithin", "at",
+  // Map/Set/Iterables
+  "entries", "values", "keys", "has", "get", "set", "delete", "add", "clear",
+  // String
+  "trim", "trimStart", "trimEnd", "split", "replace", "replaceAll",
+  "match", "matchAll", "startsWith", "endsWith", "includes",
+  "padStart", "padEnd", "repeat", "charAt", "charCodeAt", "substring", "toLowerCase", "toUpperCase",
+  // Object/General
+  "toString", "valueOf", "toJSON", "assign", "create", "freeze", "from", "isArray",
+  // Promise
   "then", "catch", "finally",
-  "assign", "create", "freeze", "from", "isArray",
 ]);
 
 function isNoisyCall(target: string): boolean {

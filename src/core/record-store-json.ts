@@ -64,6 +64,19 @@ export class JsonFileRecordStore implements IRecordStore {
     }
   }
 
+  async deleteOrphans(activeFiles: Set<string>): Promise<void> {
+    if (!existsSync(this.cacheDir)) return;
+    const activeCacheNames = new Set(
+      Array.from(activeFiles).map(fp => this.getCacheFileName(fp))
+    );
+    const files = await readdir(this.cacheDir);
+    for (const file of files) {
+      if (file.endsWith(".json") && !activeCacheNames.has(file)) {
+        await unlink(path.join(this.cacheDir, file)).catch(() => {});
+      }
+    }
+  }
+
   private getCacheFileName(filePath: string): string {
     return createHash("sha256").update(filePath).digest("hex") + ".json";
   }

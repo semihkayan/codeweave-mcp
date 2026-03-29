@@ -172,6 +172,7 @@ export interface IRecordStore {
   saveFile(filePath: string, records: FunctionRecord[], hash: string): Promise<void>;
   deleteFile(filePath: string): Promise<void>;
   getFileHash(filePath: string): Promise<string | null>;
+  deleteOrphans?(activeFiles: Set<string>): Promise<void>;
 }
 
 // === Staleness ===

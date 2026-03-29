@@ -32,6 +32,27 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
   }
 
   getByModule(module: string): FunctionRecord[] {
+    let results = this.getByModuleExact(module);
+
+    // Fallback: if sourceRoot is configured and query doesn't include it, retry with prefix
+    // Handles agent querying "core" when records are stored as "src/core"
+    if (results.length === 0 && this.config.parser.sourceRoot) {
+      const withPrefix = `${this.config.parser.sourceRoot}/${module}`;
+      results = this.getByModuleExact(withPrefix);
+    }
+
+    // Reverse fallback: agent queries "src/core" but records stored as "core"
+    if (results.length === 0 && this.config.parser.sourceRoot) {
+      const prefix = this.config.parser.sourceRoot + "/";
+      if (module.startsWith(prefix)) {
+        results = this.getByModuleExact(module.slice(prefix.length));
+      }
+    }
+
+    return results;
+  }
+
+  private getByModuleExact(module: string): FunctionRecord[] {
     const results: FunctionRecord[] = [];
     for (const [mod, ids] of this.moduleIndex) {
       if (mod === module || mod.startsWith(`${module}/`)) {
@@ -97,7 +118,11 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
   }
 
   getAllModules(): string[] {
-    return Array.from(this.moduleIndex.keys());
+    const raw = Array.from(this.moduleIndex.keys());
+    // Strip sourceRoot prefix for cleaner display (agent sees "core" not "src/core")
+    const prefix = this.config.parser.sourceRoot ? this.config.parser.sourceRoot + "/" : null;
+    if (!prefix) return raw;
+    return raw.map(m => m.startsWith(prefix) ? m.slice(prefix.length) : m);
   }
 
   getAllFilePaths(): string[] {
@@ -148,13 +173,19 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
   }
 
   async saveToDisk(): Promise<void> {
+    // Save current records
     const saves = [];
+    const activeFiles = new Set<string>();
     for (const [relPath, ids] of this.fileIndex) {
+      activeFiles.add(relPath);
       const records = ids.map(id => this.records.get(id)!).filter(Boolean);
       const hash = this.fileHashes.get(relPath) || "";
       saves.push(this.recordStore.saveFile(relPath, records, hash));
     }
     await Promise.all(saves);
+
+    // Clean up orphan cache files (from deleted/ignored files)
+    await this.recordStore.deleteOrphans?.(activeFiles);
   }
 
   async buildFull(projectRoot: string): Promise<void> {
