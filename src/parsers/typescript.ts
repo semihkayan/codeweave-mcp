@@ -108,9 +108,16 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
 
   // Arrow functions: const name = (...) => { ... }
   // Also: factory-created hooks/components: const useStore = create<T>()((set) => {...})
-  const lexDecls = walkNodes(rootNode, ["lexical_declaration"]);
+  // Only module-level declarations — skip those nested inside function bodies.
+  // A module-level lexical_declaration's parent is either "program" or "export_statement".
+  const lexDecls = walkNodes(rootNode, ["lexical_declaration"])
+    .filter(node => {
+      const parentType = node.parent?.type;
+      return parentType === "program" || parentType === "export_statement";
+    });
   for (const decl of lexDecls) {
-    const declarators = walkNodes(decl, ["variable_declarator"]);
+    // Direct children only — don't recurse into arrow function bodies
+    const declarators = decl.children.filter((c: SyntaxNode) => c.type === "variable_declarator");
     for (const vd of declarators) {
       const nameNode = vd.childForFieldName("name");
       const valueNode = vd.childForFieldName("value");
@@ -424,7 +431,17 @@ function buildSignature(name: string, params: string, returnType: string | null)
 
 export const typescriptConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-typescript").typescript,
-  extensions: [".ts", ".tsx"],
+  extensions: [".ts"],
+  extractFunctions,
+  extractCalls,
+  extractImports,
+  extractDocstring: getJSDoc,
+  extractTypeRelationships,
+};
+
+export const tsxConfig: TreeSitterLanguageConfig = {
+  grammar: require("tree-sitter-typescript").tsx,
+  extensions: [".tsx"],
   extractFunctions,
   extractCalls,
   extractImports,

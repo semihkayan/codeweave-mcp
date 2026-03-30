@@ -121,6 +121,15 @@ export function computeDensityScore(
   );
 }
 
+// === Constructor Detection ===
+
+/** Constructors declare dependencies but don't implement behavior */
+function isConstructor(record: FunctionRecord): boolean {
+  const name = record.name.split(".").pop() || record.name;
+  // All parsers produce "ClassName.constructor" or "__init__" (Python)
+  return name === "constructor" || name === "__init__";
+}
+
 // === Test File Detection (orthogonal to density) ===
 
 /**
@@ -158,7 +167,15 @@ export function applyDensityAdjustment(
     const factor = floor + density * range;
     r.score *= factor;
 
-    // Orthogonal test file penalty
+    // Orthogonal penalties for low-information-density categories
+
+    // Constructors: many params → high density score, but behavior is just assignment.
+    // Agent wants the service's methods, not its dependency list.
+    if (isConstructor(r.record)) {
+      r.score *= 0.80;
+    }
+
+    // Test files: large body → high density score, but shows verification not behavior.
     if (isTestFile(r.record.filePath)) {
       r.score *= testFilePenalty;
     }

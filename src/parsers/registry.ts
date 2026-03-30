@@ -3,7 +3,7 @@ import type { Config } from "../types/interfaces.js";
 import { TreeSitterParser } from "./tree-sitter-parser.js";
 import { logger } from "../utils/logger.js";
 import { pythonConfig } from "./python.js";
-import { typescriptConfig } from "./typescript.js";
+import { typescriptConfig, tsxConfig } from "./typescript.js";
 import { javascriptConfig } from "./javascript.js";
 import { goConfig } from "./go.js";
 import { rustConfig } from "./rust.js";
@@ -30,6 +30,15 @@ export function createTreeSitterParsers(parserConfig: Config["parser"]): ILangua
         parsers.push(new TreeSitterParser(configFactory()));
       } catch (err) {
         logger.warn({ lang, err }, `Failed to initialize parser for ${lang}`);
+      }
+    }
+
+    // TSX uses a separate grammar from TS — register automatically when typescript is enabled
+    if (lang === "typescript") {
+      try {
+        parsers.push(new TreeSitterParser(tsxConfig));
+      } catch (err) {
+        logger.warn({ lang: "tsx", err }, "Failed to initialize TSX parser");
       }
     }
   }
