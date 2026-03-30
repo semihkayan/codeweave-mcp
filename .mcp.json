@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "aidevkit": {
-      "command": "graph-server"
+    "codeweave": {
+      "command": "codeweave-server"
     }
   }
 }

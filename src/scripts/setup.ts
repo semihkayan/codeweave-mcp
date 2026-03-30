@@ -5,7 +5,6 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 
 import path from "node:path";
 import os from "node:os";
 
-const PACKAGE_NAME = "@aidevkit/graph";
 const OLLAMA_MODEL = "qwen3-embedding:0.6b";
 
 // === Helpers ===
@@ -90,7 +89,7 @@ function isDangerousDir(dir: string): boolean {
 // === Main ===
 
 async function main() {
-  console.log("\n@aidevkit/graph — Setup\n");
+  console.log("\n@codeweave/mcp — Setup\n");
 
   const cwd = process.cwd();
 
@@ -127,16 +126,16 @@ async function main() {
   }
 
   // === Step 1: Install package globally ===
-  step("1/5 Installing @aidevkit/graph...");
-  const isGloballyInstalled = runOrNull("npm list -g @aidevkit/graph --depth=0") !== null;
+  step("1/5 Installing @codeweave/mcp...");
+  const isGloballyInstalled = runOrNull("npm list -g @codeweave/mcp --depth=0") !== null;
   if (isGloballyInstalled) {
     ok("Already installed");
   } else {
-    runOrNull("npm install -g @aidevkit/graph", { stdio: "inherit" });
-    if (runOrNull("npm list -g @aidevkit/graph --depth=0") !== null) {
+    runOrNull("npm install -g @codeweave/mcp", { stdio: "inherit" });
+    if (runOrNull("npm list -g @codeweave/mcp --depth=0") !== null) {
       ok("Installed");
     } else {
-      fail("Installation failed. Try manually: npm install -g @aidevkit/graph");
+      fail("Installation failed. Try manually: npm install -g @codeweave/mcp");
       fail("Continuing without global install — some features may not work.");
     }
   }
@@ -222,13 +221,13 @@ async function main() {
     try { mcpConfig = JSON.parse(readFileSync(mcpConfigPath, "utf-8")); } catch { mcpConfig = {}; }
   }
 
-  if (mcpConfig.mcpServers?.aidevkit) {
+  if (mcpConfig.mcpServers?.codeweave) {
     ok("Already configured");
   } else {
     if (typeof mcpConfig.mcpServers !== "object" || mcpConfig.mcpServers === null) {
       mcpConfig.mcpServers = {};
     }
-    mcpConfig.mcpServers.aidevkit = { command: "graph-server" };
+    mcpConfig.mcpServers.codeweave = { command: "codeweave-server" };
     const tmpPath = mcpConfigPath + ".tmp";
     writeFileSync(tmpPath, JSON.stringify(mcpConfig, null, 2));
     const { renameSync } = await import("node:fs");
@@ -244,16 +243,16 @@ async function main() {
   const hasVectors = existsSync(path.join(codeContextDir, "lance"));
 
   if (hasAstCache && hasVectors) {
-    ok("Already indexed. Run 'graph-init --force' to rebuild.");
-  } else if (commandExists("graph-init")) {
+    ok("Already indexed. Run 'codeweave-init --force' to rebuild.");
+  } else if (commandExists("codeweave-init")) {
     try {
-      execSync("graph-init", { stdio: "inherit", cwd });
+      execSync("codeweave-init", { stdio: "inherit", cwd });
       ok("Project indexed");
     } catch {
-      warn("Indexing failed. Try manually: graph-init");
+      warn("Indexing failed. Try manually: codeweave-init");
     }
   } else {
-    warn("graph-init not found. Run 'npm install -g @aidevkit/graph' then 'graph-init'");
+    warn("codeweave-init not found. Run 'npm install -g @codeweave/mcp' then 'codeweave-init'");
   }
 
   // === Done ===

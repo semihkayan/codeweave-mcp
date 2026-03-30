@@ -1,6 +1,6 @@
 {
-  "name": "@aidevkit/graph",
-  "version": "0.2.6",
+  "name": "@codeweave/mcp",
+  "version": "0.1.0",
   "description": "Codebase graph analysis for AI agents — AST + call graph + type graph + hybrid semantic search via MCP",
   "type": "module",
   "engines": {
@@ -8,13 +8,13 @@
   },
   "main": "dist/index.js",
   "bin": {
-    "graph": "dist/scripts/setup.js",
-    "aidevkit-graph": "dist/scripts/setup.js",
-    "graph-server": "dist/index.js",
-    "graph-init": "dist/scripts/init.js",
-    "graph-reindex": "dist/scripts/reindex.js",
-    "graph-check-docstrings": "dist/scripts/check-docstrings.js",
-    "graph-setup": "dist/scripts/setup.js"
+    "codeweave": "dist/scripts/setup.js",
+    "codeweave-mcp": "dist/scripts/setup.js",
+    "codeweave-server": "dist/index.js",
+    "codeweave-init": "dist/scripts/init.js",
+    "codeweave-reindex": "dist/scripts/reindex.js",
+    "codeweave-check-docstrings": "dist/scripts/check-docstrings.js",
+    "codeweave-setup": "dist/scripts/setup.js"
   },
   "files": [
     "dist/**/*.js",
@@ -51,11 +51,11 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/semihkayan/aidevkit-graph.git"
+    "url": "git+https://github.com/semihkayan/codeweave-mcp.git"
   },
-  "homepage": "https://github.com/semihkayan/aidevkit-graph#readme",
+  "homepage": "https://github.com/semihkayan/codeweave-mcp#readme",
   "bugs": {
-    "url": "https://github.com/semihkayan/aidevkit-graph/issues"
+    "url": "https://github.com/semihkayan/codeweave-mcp/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",

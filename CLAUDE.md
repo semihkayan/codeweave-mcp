@@ -107,5 +107,5 @@ export async function handleToolName(args: { ... }, ctx: AppContext) {
 - **LanceDB tag filtering** — delimiter format `",tag1,tag2,"` with `LIKE '%,tag1,%'` for exact match. Without leading/trailing commas, `LIKE '%pay%'` false-matches `payment`.
 - **LanceDB vectors** — `Float32Array` must be converted to regular arrays before storage.
 - **Embedding failures** — failed batches are skipped (not zero-filled). Unembedded functions get retried on next reindex.
-- **LanceDB concurrent access** — `graph-init --force` and the MCP server must not run simultaneously. Both write to `.code-context/lance/`. Use the `reindex` MCP tool for live reindexing while the server runs. `graph-init` is for initial setup or recovery with the server stopped.
+- **LanceDB concurrent access** — `codeweave-init --force` and the MCP server must not run simultaneously. Both write to `.code-context/lance/`. Use the `reindex` MCP tool for live reindexing while the server runs. `codeweave-init` is for initial setup or recovery with the server stopped.
 - **LanceDB query API** — use `table.query().where(filter)` not `table.filter(filter)` (removed in newer versions). Always try/catch.

@@ -1,4 +1,4 @@
-# @aidevkit/graph
+# @codeweave/mcp
 
 Codebase graph analysis for AI agents. Goes beyond simple RAG — builds call graphs, type graphs, and dependency trees so AI actually understands your code structure.
 
@@ -37,11 +37,11 @@ Codebase graph analysis for AI agents. Goes beyond simple RAG — builds call gr
 
 ```bash
 cd your-project
-npx @aidevkit/graph
+npx @codeweave/mcp
 ```
 
 That's it. This single command:
-1. Installs `@aidevkit/graph` globally
+1. Installs `@codeweave/mcp` globally
 2. Installs Ollama if needed (brew/winget/curl)
 3. Downloads the embedding model (639 MB)
 4. Configures Claude Code to use the MCP server
@@ -54,18 +54,18 @@ Open the project in Claude Code and start asking questions.
 If you prefer step-by-step:
 
 ```bash
-npm install -g @aidevkit/graph
+npm install -g @codeweave/mcp
 ollama pull qwen3-embedding:0.6b
-graph-init
+codeweave-init
 ```
 
-Add `.mcp.json` to your project root (or run `npx @aidevkit/graph` which does this automatically):
+Add `.mcp.json` to your project root (or run `npx @codeweave/mcp` which does this automatically):
 
 ```json
 {
   "mcpServers": {
-    "aidevkit": {
-      "command": "graph-server"
+    "codeweave": {
+      "command": "codeweave-server"
     }
   }
 }
@@ -110,13 +110,13 @@ Tools require `workspace` parameter when multiple workspaces are detected:
 
 ```bash
 # Initialize index + embeddings
-graph-init [path] [--force] [--no-embed]
+codeweave-init [path] [--force] [--no-embed]
 
 # Incremental reindex
-graph-reindex [--all] [--files=a.py,b.ts] [--stdin]
+codeweave-reindex [--all] [--files=a.py,b.ts] [--stdin]
 
 # Check docstring coverage
-graph-check-docstrings [--strict] [files...]
+codeweave-check-docstrings [--strict] [files...]
 ```
 
 ## Configuration
