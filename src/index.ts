@@ -2,6 +2,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import path from "node:path";
+import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { createServices } from "./services.js";
 import { reembedFunctions } from "./core/reembed.js";
 import { logger } from "./utils/logger.js";
@@ -84,13 +85,21 @@ async function main() {
     inputSchema: IndexStatusSchema.shape,
   }, (args) => handleIndexStatus(args as any, ctx));
 
+  // PID lock file — prevents codeweave-init --force from running while server is active
+  const lockPath = path.join(services.config.projectRoot, ".code-context", "server.pid");
+  mkdirSync(path.dirname(lockPath), { recursive: true });
+  writeFileSync(lockPath, `${process.pid}\n${Date.now()}`);
+  const removeLock = () => { try { unlinkSync(lockPath); } catch { /* already gone */ } };
+
   // Graceful shutdown with timeout
   const shutdown = () => {
+    removeLock();
     const forceExit = setTimeout(() => process.exit(1), 10000);
     services.shutdown().then(() => { clearTimeout(forceExit); process.exit(0); });
   };
   process.on("SIGTERM", shutdown);
   process.on("SIGINT", shutdown);
+  process.on("exit", removeLock);
 
   // Connect transport immediately — MCP handshake completes fast
   const transport = new StdioServerTransport();

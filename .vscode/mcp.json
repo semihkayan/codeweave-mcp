@@ -1,0 +1,7 @@
+{
+  "servers": {
+    "codeweave": {
+      "command": "codeweave-server"
+    }
+  }
+}

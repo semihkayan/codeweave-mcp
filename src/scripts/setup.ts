@@ -93,6 +93,11 @@ async function main() {
 
   const cwd = process.cwd();
 
+  // Windows download size warning
+  if (os.platform() === "win32" && !commandExists("ollama")) {
+    log("Note: Setup will download ~2.5 GB (Ollama + embedding model).");
+  }
+
   // Safety check
   if (isDangerousDir(cwd)) {
     fail(`Cannot run setup in ${cwd}`);
@@ -165,6 +170,19 @@ async function main() {
       runOrNull("curl -fsSL https://ollama.com/install.sh | sh", { stdio: "inherit" });
     }
 
+    // On Windows, winget installs Ollama but doesn't always add it to PATH
+    if (!commandExists("ollama") && platform === "win32") {
+      const ollamaDir = path.join(os.homedir(), "AppData", "Local", "Programs", "Ollama");
+      if (existsSync(path.join(ollamaDir, "ollama.exe"))) {
+        const currentPath = process.env.PATH || "";
+        if (!currentPath.includes(ollamaDir)) {
+          process.env.PATH = `${currentPath};${ollamaDir}`;
+          log("Added Ollama to PATH for this session");
+          log("To make permanent, add to your PATH: " + ollamaDir);
+        }
+      }
+    }
+
     if (commandExists("ollama")) {
       ok("Installed");
     } else {
@@ -201,7 +219,12 @@ async function main() {
         ok(`${OLLAMA_MODEL} ready`);
       } else {
         log(`Pulling ${OLLAMA_MODEL}...`);
-        try { execSync(`ollama pull ${OLLAMA_MODEL}`, { stdio: "inherit" }); } catch { /* handled below */ }
+        try {
+          execSync(`ollama pull ${OLLAMA_MODEL}`, {
+            stdio: "inherit",
+            env: { ...process.env, OLLAMA_INSECURE: "true" },
+          });
+        } catch { /* handled below */ }
         const modelsAfter = runOrNull("ollama list") || "";
         if (modelsAfter.includes(OLLAMA_MODEL.split(":")[0])) {
           ok("Model downloaded");
@@ -212,8 +235,8 @@ async function main() {
     }
   }
 
-  // === Step 4: Configure Claude Code ===
-  step("4/5 Configuring Claude Code...");
+  // === Step 4: Configure MCP clients ===
+  step("4/5 Configuring MCP clients...");
   const mcpConfigPath = path.join(cwd, ".mcp.json");
 
   let mcpConfig: Record<string, any> = {};
@@ -222,7 +245,7 @@ async function main() {
   }
 
   if (mcpConfig.mcpServers?.codeweave) {
-    ok("Already configured");
+    ok("Claude Code: already configured");
   } else {
     if (typeof mcpConfig.mcpServers !== "object" || mcpConfig.mcpServers === null) {
       mcpConfig.mcpServers = {};
@@ -232,7 +255,30 @@ async function main() {
     writeFileSync(tmpPath, JSON.stringify(mcpConfig, null, 2));
     const { renameSync } = await import("node:fs");
     renameSync(tmpPath, mcpConfigPath);
-    ok("Added to .mcp.json");
+    ok("Claude Code: added to .mcp.json");
+  }
+
+  // 4b: VS Code Copilot — .vscode/mcp.json
+  const vscodeMcpPath = path.join(cwd, ".vscode", "mcp.json");
+
+  let vscodeMcpConfig: Record<string, any> = {};
+  if (existsSync(vscodeMcpPath)) {
+    try { vscodeMcpConfig = JSON.parse(readFileSync(vscodeMcpPath, "utf-8")); } catch { vscodeMcpConfig = {}; }
+  }
+
+  if (vscodeMcpConfig.servers?.["codeweave"]) {
+    ok("VS Code: already configured");
+  } else {
+    if (typeof vscodeMcpConfig.servers !== "object" || vscodeMcpConfig.servers === null) {
+      vscodeMcpConfig.servers = {};
+    }
+    vscodeMcpConfig.servers["codeweave"] = { command: "codeweave-server" };
+    mkdirSync(path.join(cwd, ".vscode"), { recursive: true });
+    const tmpPath2 = vscodeMcpPath + ".tmp";
+    writeFileSync(tmpPath2, JSON.stringify(vscodeMcpConfig, null, 2));
+    const { renameSync } = await import("node:fs");
+    renameSync(tmpPath2, vscodeMcpPath);
+    ok("VS Code: added to .vscode/mcp.json");
   }
 
   // === Step 5: Index project ===

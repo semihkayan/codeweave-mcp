@@ -14,6 +14,14 @@ import { detectWorkspaces } from "../core/workspace-detector.js";
 import { ImportResolver } from "../core/import-resolver.js";
 import { CallGraphManager } from "../core/call-graph.js";
 import { TypeGraphManager } from "../core/type-graph/type-graph.js";
+import { existsSync, readFileSync } from "node:fs";
+
+/** Check if PID from lock file is still a running process */
+function isProcessRunning(pid: number): boolean {
+  try { process.kill(pid, 0); return true; } catch { return false; }
+}
+
+const STALE_LOCK_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 async function main() {
   const args = process.argv.slice(2);
@@ -23,10 +31,20 @@ async function main() {
 
   const resolvedRoot = path.resolve(projectRoot);
 
-  // Warn if MCP server might be running — concurrent access to LanceDB causes corruption
+  // Block if MCP server is running — concurrent access to LanceDB causes corruption
   if (force) {
-    console.log("⚠  Stop the MCP server before running --force (it shares the LanceDB).");
-    console.log("   For live reindexing while the server runs, use the 'reindex' MCP tool instead.\n");
+    const lockPath = path.join(resolvedRoot, ".code-context", "server.pid");
+    if (existsSync(lockPath)) {
+      const lines = readFileSync(lockPath, "utf-8").trim().split("\n");
+      const pid = parseInt(lines[0], 10);
+      const timestamp = parseInt(lines[1], 10);
+      const isStale = !isNaN(timestamp) && (Date.now() - timestamp > STALE_LOCK_MS);
+      if (!isNaN(pid) && !isStale && isProcessRunning(pid)) {
+        console.error("✗ MCP server is running (PID " + pid + "). Stop it before running --force.");
+        console.error("  For live reindexing, use the 'reindex' MCP tool instead.");
+        process.exit(1);
+      }
+    }
   }
 
   const config = await loadConfig(resolvedRoot);
