@@ -5,7 +5,7 @@ import { SourceExtractor } from "./core/source-extractor.js";
 import { JsonFileRecordStore } from "./core/record-store-json.js";
 import { HashBasedStalenessChecker } from "./core/staleness-hash.js";
 import { DocstringParser } from "./core/docstring-parser.js";
-import { createTreeSitterParsers } from "./parsers/registry.js";
+import { createTreeSitterParsers, aggregateTestMetadata, aggregateNoiseMetadata } from "./parsers/registry.js";
 import { ImportResolver } from "./core/import-resolver.js";
 import { CallGraphManager } from "./core/call-graph.js";
 import { OllamaEmbeddingProvider } from "./core/embedders/ollama.js";
@@ -30,6 +30,8 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
 
   // Shared services
   const parsers = createTreeSitterParsers(config.parser);
+  const testMetadata = aggregateTestMetadata(parsers);
+  const noiseFilter = aggregateNoiseMetadata(parsers);
   const docstringParser = new DocstringParser();
   const embedding = new OllamaEmbeddingProvider(
     config.embedding.ollamaUrl,
@@ -68,7 +70,7 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
 
     const recordStore = new JsonFileRecordStore(cacheDir);
     const staleness = new HashBasedStalenessChecker(config);
-    const functionIndex = new FunctionIndex(parsers, recordStore, staleness, docstringParser, config, wsRoot);
+    const functionIndex = new FunctionIndex(parsers, recordStore, staleness, docstringParser, config, wsRoot, testMetadata);
     const sourceExtractor = new SourceExtractor(functionIndex, wsRoot);
 
     // Vector DB + Search pipeline — real implementation
@@ -117,6 +119,7 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     embedding,
     embeddingAvailable: await embedding.isAvailable(),
     parsers,
+    noiseFilter,
     watcher,
     git: new GitService(),
     reindex: reindexOrchestrator,

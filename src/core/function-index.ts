@@ -4,46 +4,14 @@ import ignore from "ignore";
 import type {
   IFunctionIndexReader, IFunctionIndexWriter, ILanguageParser,
   IRecordStore, IStalenessChecker, IDocstringParser, Config,
+  TestDetectionMetadata,
 } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
 import { readFile, computeModule, detectLanguage } from "../utils/file-utils.js";
 import { globSourceFiles } from "../utils/file-utils.js";
 
-// Test framework decorators — if ANY function in a file has one, the file is a test file
-const TEST_DECORATORS = [
-  // Java/Kotlin (JUnit, TestNG)
-  "@Test", "@ParameterizedTest", "@RepeatedTest", "@BeforeEach", "@AfterEach",
-  "@BeforeAll", "@AfterAll", "@Nested", "@ExtendWith",
-  // C# (NUnit, xUnit, MSTest)
-  "@[Test]", "@[TestMethod]", "@[Fact]", "@[Theory]", "@[TestFixture]", "@[SetUp]", "@[TearDown]",
-  // Rust
-  "#[test]", "#[cfg(test)]",
-  // Python (pytest)
-  "@pytest.mark",
-];
-
-// Test framework import prefixes per language — if a file imports from these, it's a test file
-const TEST_IMPORT_PREFIXES: Record<string, string[]> = {
-  java: ["org.junit", "org.mockito", "org.assertj", "org.springframework.boot.test", "org.springframework.test", "org.testng"],
-  kotlin: ["org.junit", "org.mockito", "org.assertj", "kotlin.test"],
-  python: ["pytest", "unittest", "hypothesis"],
-  typescript: ["jest", "vitest", "@jest", "@testing-library", "enzyme", "supertest", "@playwright/test", "cypress"],
-  javascript: ["jest", "vitest", "@jest", "@testing-library", "enzyme", "supertest", "mocha", "chai", "@playwright/test", "cypress"],
-  go: ["testing", "github.com/stretchr/testify"],
-  rust: ["mockall", "proptest"],
-  csharp: ["NUnit", "Xunit", "Microsoft.VisualStudio.TestTools", "Moq", "FluentAssertions"],
-};
-
-function hasTestDecorator(records: FunctionRecord[]): boolean {
-  return records.some(r =>
-    r.decorators?.some(d =>
-      TEST_DECORATORS.some(td => d.includes(td))
-    )
-  );
-}
-
 /**
- * Detect whether a file contains test code using structural signals:
+ * Detect whether a file contains test code using structural signals from parser metadata:
  * 1. Decorator check (free — already extracted): @Test, #[test], [Fact], etc.
  * 2. Import check (one parseImports call): junit, pytest, jest, testing, etc.
  */
@@ -52,13 +20,20 @@ function detectTestFile(
   parser: ILanguageParser,
   source: string,
   filePath: string,
-  config: Config,
+  testMetadata: TestDetectionMetadata,
 ): boolean {
-  if (hasTestDecorator(fileRecords)) return true;
+  // Decorator check — free, already parsed
+  const hasTestDecorator = fileRecords.some(r =>
+    r.decorators?.some(d =>
+      testMetadata.allTestDecorators.some(td => d.includes(td))
+    )
+  );
+  if (hasTestDecorator) return true;
 
-  const language = fileRecords[0]?.language || detectLanguage(filePath, config.parser.languages) || "";
-  const prefixes = TEST_IMPORT_PREFIXES[language];
-  if (!prefixes) return false;
+  // Import check — one parseImports call, lookup by file extension
+  const ext = "." + filePath.split(".").pop();
+  const prefixes = testMetadata.testImportPrefixesByExtension.get(ext);
+  if (!prefixes || prefixes.length === 0) return false;
 
   const imports = parser.parseImports(source, filePath);
   return imports.some(imp => prefixes.some(prefix => imp.modulePath.startsWith(prefix)));
@@ -79,6 +54,7 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     private docstringParser: IDocstringParser,
     private config: Config,
     public readonly projectRoot: string,
+    private testMetadata: TestDetectionMetadata,
   ) {}
 
   // === IFunctionIndexReader ===
@@ -337,7 +313,7 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       }
 
       // Mark test files structurally (decorator + import analysis)
-      if (detectTestFile(fileRecords, parser, source, relPath, this.config)) {
+      if (detectTestFile(fileRecords, parser, source, relPath, this.testMetadata)) {
         for (const record of fileRecords) {
           record.structuralHints = { ...record.structuralHints, isTest: true };
         }

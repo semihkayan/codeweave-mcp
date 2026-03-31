@@ -466,19 +466,35 @@ function buildSignature(name: string, params: string, returnType: string | null)
 export const typescriptConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-typescript").typescript,
   extensions: [".ts"],
-  extractFunctions,
-  extractCalls,
-  extractImports,
-  extractDocstring: getJSDoc,
-  extractTypeRelationships,
+  extractFunctions, extractCalls, extractImports, extractDocstring: getJSDoc, extractTypeRelationships,
+
+  testImportPrefixes: [
+    "jest", "vitest", "@jest", "@testing-library", "enzyme", "supertest", "@playwright/test", "cypress",
+  ],
+  noiseTargets: [
+    "console.log", "console.error", "console.warn", "console.info", "console.debug",
+    "JSON.parse", "JSON.stringify", "Object.keys", "Object.values", "Object.entries",
+    "Object.assign", "Object.freeze", "Object.create", "Array.from", "Array.isArray",
+    "Math.floor", "Math.ceil", "Math.round", "Math.max", "Math.min", "Math.abs", "Math.random",
+    "Promise.all", "Promise.resolve", "Promise.reject", "Promise.allSettled",
+    "Date.now", "Number.parseInt", "Number.parseFloat", "String.fromCharCode",
+    "Set.has", "Map.has", "Map.get", "Map.set",
+  ],
+  builtinMethods: [
+    "map", "filter", "reduce", "forEach", "find", "some", "every", "includes",
+    "push", "pop", "shift", "unshift", "slice", "splice", "concat", "flat", "flatMap",
+    "join", "sort", "reverse", "indexOf", "lastIndexOf", "fill", "copyWithin", "at",
+    "entries", "values", "keys", "has", "get", "set", "delete", "add", "clear",
+    "trim", "trimStart", "trimEnd", "split", "replace", "replaceAll",
+    "match", "matchAll", "startsWith", "endsWith",
+    "padStart", "padEnd", "repeat", "charAt", "charCodeAt", "substring", "toLowerCase", "toUpperCase",
+    "toJSON", "assign", "create", "freeze", "from", "isArray",
+    "then", "catch", "finally",
+  ],
 };
 
 export const tsxConfig: TreeSitterLanguageConfig = {
+  ...typescriptConfig,
   grammar: require("tree-sitter-typescript").tsx,
   extensions: [".tsx"],
-  extractFunctions,
-  extractCalls,
-  extractImports,
-  extractDocstring: getJSDoc,
-  extractTypeRelationships,
 };

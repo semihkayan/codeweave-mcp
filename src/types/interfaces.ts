@@ -212,6 +212,19 @@ export interface IReindexOrchestrator {
   handleFileChanges(ws: WorkspaceServices, wsPath: string, changedFiles: string[]): Promise<void>;
 }
 
+// === Language Metadata (aggregated from parser configs at startup) ===
+
+export interface TestDetectionMetadata {
+  allTestDecorators: string[];
+  testImportPrefixesByExtension: Map<string, string[]>;
+}
+
+export interface NoiseFilterMetadata {
+  noiseTargets: Set<string>;
+  builtinMethods: Set<string>;
+  noisePatterns: RegExp[];
+}
+
 // === Workspace Services (per-workspace isolated) ===
 
 export interface WorkspaceServices {
@@ -237,6 +250,7 @@ export interface AppContext {
   readonly embedding: IEmbeddingProvider;
   readonly embeddingAvailable: boolean;
   readonly parsers: ILanguageParser[];
+  readonly noiseFilter: NoiseFilterMetadata;
   readonly watcher: IFileWatcher;
   readonly git: IGitService;
   readonly reindex: IReindexOrchestrator;

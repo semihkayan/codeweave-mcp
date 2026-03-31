@@ -143,4 +143,26 @@ export const goConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-go"),
   extensions: [".go"],
   extractFunctions, extractCalls, extractImports, extractDocstring: getDocComment, extractTypeRelationships,
+
+  testImportPrefixes: ["testing", "github.com/stretchr/testify"],
+  noiseTargets: [
+    "fmt.Println", "fmt.Printf", "fmt.Sprintf", "fmt.Errorf", "fmt.Fprintf",
+    "errors.New", "errors.Is", "errors.As", "errors.Unwrap",
+    "context.Background", "context.TODO", "context.WithCancel", "context.WithTimeout",
+    "strings.Contains", "strings.HasPrefix", "strings.HasSuffix", "strings.TrimSpace",
+    "strings.Split", "strings.Join", "strings.Replace", "strings.ToLower", "strings.ToUpper",
+    "strconv.Itoa", "strconv.Atoi", "strconv.FormatInt", "strconv.ParseInt",
+    "filepath.Join", "filepath.Dir", "filepath.Base", "filepath.Ext",
+    "sync.WaitGroup", "sync.Mutex", "sync.Once",
+    "log.Println", "log.Printf", "log.Fatal", "log.Fatalf",
+    "math.Max", "math.Min", "math.Abs",
+  ],
+  builtinMethods: [
+    "Error", "String", "Close", "Read", "Write", "Len", "Cap",
+    "Lock", "Unlock", "RLock", "RUnlock", "Wait", "Signal", "Broadcast",
+    "Done", "Err", "Value", "Deadline",
+  ],
+  noisePatterns: [
+    /^(fmt|errors|context|strings|strconv|filepath|sync|log|math|sort|io|bytes|os|time|reflect|regexp|testing|net|http|encoding)\.\w+$/,
+  ],
 };

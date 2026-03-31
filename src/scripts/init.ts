@@ -2,7 +2,7 @@
 
 import path from "node:path";
 import { loadConfig } from "../utils/config.js";
-import { createTreeSitterParsers } from "../parsers/registry.js";
+import { createTreeSitterParsers, aggregateTestMetadata } from "../parsers/registry.js";
 import { FunctionIndex } from "../core/function-index.js";
 import { JsonFileRecordStore } from "../core/record-store-json.js";
 import { HashBasedStalenessChecker } from "../core/staleness-hash.js";
@@ -75,7 +75,7 @@ async function main() {
 
     const recordStore = new JsonFileRecordStore(cacheDir);
     const staleness = new HashBasedStalenessChecker(config);
-    const index = new FunctionIndex(parsers, recordStore, staleness, docstringParser, config, wsRoot);
+    const index = new FunctionIndex(parsers, recordStore, staleness, docstringParser, config, wsRoot, aggregateTestMetadata(parsers));
 
     if (!force) await index.loadFromDisk();
 

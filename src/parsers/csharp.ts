@@ -176,4 +176,31 @@ export const csharpConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-c-sharp"),
   extensions: [".cs"],
   extractFunctions, extractCalls, extractImports, extractDocstring: getXmlDoc, extractTypeRelationships,
+
+  testDecorators: ["@[Test]", "@[TestMethod]", "@[Fact]", "@[Theory]", "@[TestFixture]", "@[SetUp]", "@[TearDown]"],
+  testImportPrefixes: ["NUnit", "Xunit", "Microsoft.VisualStudio.TestTools", "Moq", "FluentAssertions"],
+  noiseTargets: [
+    "Console.WriteLine", "Console.Write", "Console.ReadLine",
+    "Convert.ToInt32", "Convert.ToString", "Convert.ToDouble",
+    "Guid.NewGuid", "Guid.Parse", "Guid.Empty",
+    "DateTime.Now", "DateTime.UtcNow", "DateTime.Parse", "DateTime.TryParse",
+    "TimeSpan.FromSeconds", "TimeSpan.FromMinutes", "TimeSpan.FromHours",
+    "Task.Run", "Task.WhenAll", "Task.WhenAny", "Task.FromResult", "Task.CompletedTask",
+    "string.IsNullOrEmpty", "string.IsNullOrWhiteSpace", "string.Join", "string.Format",
+    "Path.Combine", "Path.GetExtension", "Path.GetFileName",
+    "File.ReadAllText", "File.WriteAllText", "File.Exists",
+    "Enum.Parse", "Enum.TryParse",
+  ],
+  builtinMethods: [
+    "Any", "All", "Where", "Select", "SelectMany", "FirstOrDefault", "First",
+    "SingleOrDefault", "Single", "Count", "Sum", "Average", "OrderBy", "OrderByDescending",
+    "GroupBy", "Distinct", "Skip", "Take", "ToArray",
+    "Add", "Remove", "Contains", "ContainsKey", "TryGetValue",
+    "Append", "Insert", "RemoveAt", "AddRange",
+    "GetAwaiter", "GetResult", "ConfigureAwait",
+    "Dispose",
+  ],
+  noisePatterns: [
+    /^(Console|Convert|Guid|DateTime|DateTimeOffset|TimeSpan|Task|Math|Enum|Path|File|Directory|Regex|StringBuilder|Activator|GC|Monitor|Interlocked|CancellationToken|JsonSerializer|Environment)\.\w+$/,
+  ],
 };

@@ -17,6 +17,13 @@ export interface TreeSitterLanguageConfig {
   extractImports(rootNode: SyntaxNode, filePath: string): RawImportInfo[];
   extractDocstring(node: SyntaxNode): string | null;
   extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTypeRelationship[];
+
+  // Language-specific metadata (optional — aggregated across all configs at startup)
+  testDecorators?: string[];
+  testImportPrefixes?: string[];
+  noiseTargets?: string[];
+  builtinMethods?: string[];
+  noisePatterns?: RegExp[];
 }
 
 export class TreeSitterParser implements ILanguageParser {
@@ -58,4 +65,11 @@ export class TreeSitterParser implements ILanguageParser {
     const tree = this.parse(source);
     return this.config.extractTypeRelationships(tree.rootNode, filePath);
   }
+
+  // Metadata getters — used by aggregation functions in registry.ts
+  get testDecorators(): string[] { return this.config.testDecorators ?? []; }
+  get testImportPrefixes(): string[] { return this.config.testImportPrefixes ?? []; }
+  get noiseTargets(): string[] { return this.config.noiseTargets ?? []; }
+  get builtinMethods(): string[] { return this.config.builtinMethods ?? []; }
+  get noisePatterns(): RegExp[] { return this.config.noisePatterns ?? []; }
 }

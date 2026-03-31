@@ -252,9 +252,29 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
 export const pythonConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-python"),
   extensions: [".py"],
-  extractFunctions,
-  extractCalls,
-  extractImports,
-  extractDocstring: getDocstring,
-  extractTypeRelationships,
+  extractFunctions, extractCalls, extractImports, extractDocstring: getDocstring, extractTypeRelationships,
+
+  testDecorators: ["@pytest.mark"],
+  testImportPrefixes: ["pytest", "unittest", "hypothesis"],
+  noiseTargets: [
+    "print", "len", "range", "str", "int", "float", "bool", "list", "dict", "set", "tuple",
+    "isinstance", "issubclass", "hasattr", "getattr", "setattr", "super", "type", "id", "hash",
+    "enumerate", "zip", "map", "filter", "sorted", "reversed", "max", "min", "sum", "any", "all",
+    "os.path.join", "os.path.exists", "os.path.dirname", "os.path.basename",
+    "os.path.abspath", "os.makedirs", "os.listdir", "os.remove",
+    "json.loads", "json.dumps", "json.load", "json.dump",
+    "logging.getLogger", "logging.info", "logging.debug", "logging.warning", "logging.error",
+    "datetime.now", "datetime.utcnow", "datetime.strptime", "datetime.strftime",
+    "time.time", "time.sleep",
+    "re.match", "re.search", "re.sub", "re.compile", "re.findall",
+    "copy.deepcopy", "copy.copy",
+  ],
+  builtinMethods: [
+    "append", "extend", "insert", "remove", "items", "update", "strip", "lstrip", "rstrip",
+    "encode", "decode", "format", "upper", "lower", "capitalize", "title",
+    "count", "index", "copy", "pop",
+  ],
+  noisePatterns: [
+    /^(os|os\.path|sys|io|pathlib|typing|abc|dataclasses|functools|itertools|collections|math|random|shutil|glob|subprocess|tempfile|unittest|pytest)\.\w+$/,
+  ],
 };

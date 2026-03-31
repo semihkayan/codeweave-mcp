@@ -1,5 +1,4 @@
-import type { ILanguageParser } from "../types/interfaces.js";
-import type { Config } from "../types/interfaces.js";
+import type { Config, TestDetectionMetadata, NoiseFilterMetadata } from "../types/interfaces.js";
 import { TreeSitterParser } from "./tree-sitter-parser.js";
 import { logger } from "../utils/logger.js";
 import { pythonConfig } from "./python.js";
@@ -20,8 +19,8 @@ const PARSER_CONFIGS: Record<string, () => import("./tree-sitter-parser.js").Tre
   csharp: () => csharpConfig,
 };
 
-export function createTreeSitterParsers(parserConfig: Config["parser"]): ILanguageParser[] {
-  const parsers: ILanguageParser[] = [];
+export function createTreeSitterParsers(parserConfig: Config["parser"]): TreeSitterParser[] {
+  const parsers: TreeSitterParser[] = [];
 
   for (const lang of Object.keys(parserConfig.languages)) {
     const configFactory = PARSER_CONFIGS[lang];
@@ -44,4 +43,42 @@ export function createTreeSitterParsers(parserConfig: Config["parser"]): ILangua
   }
 
   return parsers;
+}
+
+// === Metadata Aggregation ===
+// Merges per-language metadata from parser configs into unified lookup structures.
+// Called once at startup by services.ts.
+
+// Cross-language noise patterns — not language-specific, structural heuristics
+const SHARED_NOISE_PATTERNS: RegExp[] = [
+  /^(logger|log|logging|console|slog|zap|logrus|Log|_logger|_log|ILogger)\.\w+$/i,
+  /^(Assert|Assertions|Expect|expect|assert|assertThat|verify|mock|when|given)\.\w+$/i,
+];
+
+export function aggregateTestMetadata(parsers: TreeSitterParser[]): TestDetectionMetadata {
+  const allTestDecorators: string[] = [];
+  const testImportPrefixesByExtension = new Map<string, string[]>();
+
+  for (const p of parsers) {
+    allTestDecorators.push(...p.testDecorators);
+    for (const ext of p.extensions) {
+      testImportPrefixesByExtension.set(ext, p.testImportPrefixes);
+    }
+  }
+
+  return { allTestDecorators, testImportPrefixesByExtension };
+}
+
+export function aggregateNoiseMetadata(parsers: TreeSitterParser[]): NoiseFilterMetadata {
+  const noiseTargets = new Set<string>();
+  const builtinMethods = new Set<string>();
+  const noisePatterns: RegExp[] = [...SHARED_NOISE_PATTERNS];
+
+  for (const p of parsers) {
+    for (const t of p.noiseTargets) noiseTargets.add(t);
+    for (const m of p.builtinMethods) builtinMethods.add(m);
+    noisePatterns.push(...p.noisePatterns);
+  }
+
+  return { noiseTargets, builtinMethods, noisePatterns };
 }

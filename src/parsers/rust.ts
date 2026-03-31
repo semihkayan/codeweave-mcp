@@ -147,4 +147,30 @@ export const rustConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-rust"),
   extensions: [".rs"],
   extractFunctions, extractCalls, extractImports, extractDocstring: getDocComment, extractTypeRelationships,
+
+  testDecorators: ["#[test]", "#[cfg(test)]"],
+  testImportPrefixes: ["mockall", "proptest"],
+  noiseTargets: [
+    "println!", "eprintln!", "format!", "panic!", "todo!", "unimplemented!",
+    "vec!", "assert!", "assert_eq!", "assert_ne!",
+    "String.from", "String.new",
+    "Vec.new", "Vec.with_capacity",
+    "HashMap.new", "HashSet.new", "BTreeMap.new",
+    "Box.new", "Arc.new", "Rc.new", "Mutex.new", "RwLock.new",
+    "Option.unwrap", "Option.expect", "Option.map", "Option.and_then",
+    "Result.unwrap", "Result.expect", "Result.map", "Result.map_err",
+    "Ok", "Err", "Some", "None",
+  ],
+  builtinMethods: [
+    "unwrap", "expect", "unwrap_or", "unwrap_or_else", "unwrap_or_default",
+    "map", "and_then", "or_else", "ok_or", "ok_or_else",
+    "iter", "into_iter", "collect", "for_each",
+    "len", "is_empty", "contains", "insert", "remove", "push", "pop",
+    "clone", "to_string", "to_owned", "as_ref", "as_mut",
+    "lock", "read", "write", "try_lock",
+    "into", "from", "try_into", "try_from",
+  ],
+  noisePatterns: [
+    /^(String|Vec|HashMap|HashSet|BTreeMap|BTreeSet|Box|Arc|Rc|Mutex|RwLock|Cell|RefCell|Option|Result|Cow|Pin)\.\w+$/,
+  ],
 };

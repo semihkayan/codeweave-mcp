@@ -192,4 +192,34 @@ export const javaConfig: TreeSitterLanguageConfig = {
   grammar: require("tree-sitter-java"),
   extensions: [".java"],
   extractFunctions, extractCalls, extractImports, extractDocstring: getJavadoc, extractTypeRelationships,
+
+  testDecorators: [
+    "@Test", "@ParameterizedTest", "@RepeatedTest", "@BeforeEach", "@AfterEach",
+    "@BeforeAll", "@AfterAll", "@Nested", "@ExtendWith",
+  ],
+  testImportPrefixes: [
+    "org.junit", "org.mockito", "org.assertj",
+    "org.springframework.boot.test", "org.springframework.test", "org.testng",
+  ],
+  noiseTargets: [
+    "Instant.now", "Objects.requireNonNull", "Objects.hash", "Objects.equals",
+    "UUID.randomUUID", "Duration.between", "Duration.ofSeconds", "Duration.ofMinutes",
+    "Date.from", "BigDecimal.valueOf", "Optional.of", "Optional.ofNullable", "Optional.empty",
+    "Collections.unmodifiableList", "Collections.singletonList",
+    "Collections.emptyList", "Collections.emptyMap", "Stream.of",
+    "ResponseEntity.ok", "ResponseEntity.status", "ResponseEntity.notFound",
+    "Arrays.asList", "Arrays.stream", "Arrays.sort",
+    "Integer.parseInt", "Integer.valueOf", "Long.parseLong", "Long.valueOf",
+    "String.format", "String.valueOf", "Boolean.parseBoolean",
+  ],
+  builtinMethods: [
+    "orElse", "orElseGet", "orElseThrow", "isPresent", "ifPresent",
+    "stream", "collect", "toList", "of", "copyOf",
+    "equals", "hashCode", "compareTo", "toString", "valueOf", "getClass",
+    "intValue", "longValue", "doubleValue", "floatValue",
+    "name", "ordinal",
+  ],
+  noisePatterns: [
+    /^(System|Math|Arrays|Collections|Objects|Optional|Stream|Collectors|Integer|Long|Double|Float|String|Boolean|Character|BigDecimal|BigInteger|UUID|Instant|Duration|LocalDate|LocalDateTime|ZonedDateTime|Date|TimeUnit|Pattern|Matcher|StringBuilder|StringBuffer|Thread|Executors|CompletableFuture|AtomicInteger|AtomicLong|ResponseEntity|HttpStatus)\.\w+$/,
+  ],
 };

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file contains only what an agent cannot easily derive from code: architectural decisions and their reasons, non-obvious conventions, and cross-cutting rules. If it's in the code or inferable from it, it doesn't belong here.
+This file contains only what an agent cannot easily derive from code: architectural decisions and their reasons, non-obvious conventions, and cross-cutting rules. **Before changing anything, ask: "Can the agent figure this out easily by reading the code?" If yes, don't add it.**
 
 ## What this project is
 
@@ -23,9 +23,9 @@ Single-process Node.js MCP server. stdout is reserved for MCP protocol — never
 ### Layers
 
 ```
-index.ts             → MCP shell: registerTool × 10, transport, shutdown
+index.ts             → MCP shell: registerTool × 8, transport, shutdown
 services.ts          → Composition root: ALL concrete instantiation here
-tools/               → 10 tool handlers (thin orchestrators, interface-only deps)
+tools/               → 8 tool handlers (thin orchestrators, interface-only deps)
 core/                → Business logic behind interfaces
 parsers/             → 7 language parsers (tree-sitter wrappers)
 utils/               → Config, file I/O, git, logging, SQL escape
@@ -47,6 +47,10 @@ types/interfaces.ts  → All interfaces
 All concrete class instantiation is in `createServices()`. Tool handlers never import concrete classes — they receive `AppContext` which exposes only interfaces. To swap a component (e.g., LanceDB → Qdrant): change 1 line in `services.ts`.
 
 ## Rules
+
+### SOLID
+
+Follow SOLID principles in all changes. Concrete example: all language-specific knowledge (test markers, noise targets, builtin methods) lives in parser configs — never in tool handlers or core modules. Adding a language must not require modifying existing files beyond `registry.ts`.
 
 ### Language & project agnosticism
 
@@ -80,7 +84,7 @@ export async function handleToolName(args: { ... }, ctx: AppContext) {
 
 ### New language parser
 
-1. Create `src/parsers/{language}.ts` — implement 5 extract functions (`extractFunctions`, `extractCalls`, `extractImports`, `extractTypeRelationships`, `extractDocstring`)
+1. Create `src/parsers/{language}.ts` — implement 5 extract functions (`extractFunctions`, `extractCalls`, `extractImports`, `extractTypeRelationships`, `extractDocstring`) + metadata fields (`testDecorators`, `testImportPrefixes`, `noiseTargets`, `builtinMethods`, `noisePatterns`)
 2. Export a `TreeSitterLanguageConfig`
 3. Add to `PARSER_CONFIGS` in `src/parsers/registry.ts`
 4. Add extensions to default config in `src/utils/config.ts`
