@@ -1,4 +1,4 @@
-import type { IFunctionIndexReader, IEmbeddingProvider, IVectorDatabase, Config } from "../types/interfaces.js";
+import type { IFunctionIndexReader, IEmbeddingProvider, IVectorDatabase, ICallGraphReader, Config } from "../types/interfaces.js";
 import type { FunctionRecord, VectorRow } from "../types/index.js";
 import { buildChunk } from "./chunk-builder.js";
 
@@ -33,12 +33,42 @@ function resolveClassContexts(
   return result;
 }
 
+/**
+ * Extract call target names from call graph for each function.
+ * These serve as implicit dependencies when no docstring @deps exist,
+ * enriching the embedding chunk with what the function actually does.
+ */
+function resolveCallTargets(
+  records: FunctionRecord[],
+  callGraph?: ICallGraphReader,
+): Map<string, string[]> {
+  const result = new Map<string, string[]>();
+  if (!callGraph) return result;
+
+  for (const record of records) {
+    if (record.kind === "class" || record.kind === "interface") continue;
+    const entry = callGraph.getEntry(record.id);
+    if (!entry || entry.calls.length === 0) continue;
+
+    const targets = [...new Set(
+      entry.calls
+        .map(c => c.target)
+        .filter(t => t.length > 2)
+    )].slice(0, 10);
+
+    if (targets.length > 0) result.set(record.id, targets);
+  }
+
+  return result;
+}
+
 export async function reembedFunctions(
   changedIds: string[],
   index: IFunctionIndexReader,
   embedding: IEmbeddingProvider,
   vectorDb: IVectorDatabase,
   config: Config,
+  callGraph?: ICallGraphReader,
 ): Promise<void> {
   const records = changedIds
     .map(id => index.getById(id))
@@ -53,8 +83,9 @@ export async function reembedFunctions(
 
   // Resolve class context for methods, then build chunks
   const classContextMap = resolveClassContexts(records, index);
+  const callTargetMap = resolveCallTargets(records, callGraph);
   const chunks = records.map(r =>
-    buildChunk(r, chunkConfig, classContextMap.get(r.id) ?? null)
+    buildChunk(r, chunkConfig, classContextMap.get(r.id) ?? null, callTargetMap.get(r.id) ?? null)
   );
 
   // Batch embed — skip failed batches instead of inserting zero vectors

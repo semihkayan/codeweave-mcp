@@ -17,6 +17,7 @@ export function buildChunk(
   record: FunctionRecord,
   config: ChunkConfig,
   classContext?: string | null,
+  callTargets?: string[] | null,
 ): string {
   const expand = config.expandCamelCase ? expandIdentifiers : (s: string) => s;
   const parts: string[] = [];
@@ -68,6 +69,11 @@ export function buildChunk(
     if (paramInfo) parts.push(paramInfo);
     const returnInfo = extractReturnType(record.signature);
     if (returnInfo) parts.push(returnInfo);
+  }
+
+  // Call targets as implicit deps — only when docstring doesn't have curated @deps
+  if (!record.docstring?.deps?.length && callTargets?.length) {
+    parts.push(`depends on: ${callTargets.join(", ")}`);
   }
 
   let chunk = parts.join("\n");

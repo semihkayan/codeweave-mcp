@@ -17,10 +17,12 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
     const start = Date.now();
     await ws.indexWriter.buildFull(ws.projectRoot);
 
+    // Graphs first — call graph data enriches embedding chunks
+    await this.rebuildGraphs(ws, wsPath);
+
     const allIds = ws.index.getAllFilePaths().flatMap(fp => ws.index.getFileRecordIds(fp));
     const embedded = await this.embedIfAvailable(allIds, ws);
 
-    await this.rebuildGraphs(ws, wsPath);
     await ws.indexWriter.saveToDisk();
 
     return { mode: "full_rebuild", changedFunctions: allIds.length, embedded, elapsedMs: Date.now() - start };
@@ -30,32 +32,30 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
     const start = Date.now();
     const changedIds = await ws.indexWriter.refreshStale(ws.projectRoot);
 
-    const embedded = changedIds.length > 0
-      ? await this.embedIfAvailable(changedIds, ws)
-      : 0;
-
     if (changedIds.length > 0) {
+      // Graphs first — call graph data enriches embedding chunks
       await this.rebuildGraphs(ws, wsPath);
+      const embedded = await this.embedIfAvailable(changedIds, ws);
       await ws.indexWriter.saveToDisk();
+      return { mode: "incremental", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
     }
 
-    return { mode: "incremental", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
+    return { mode: "incremental", changedFunctions: 0, embedded: 0, elapsedMs: Date.now() - start };
   }
 
   async reindexFiles(ws: WorkspaceServices, wsPath: string, files: string[]): Promise<ReindexResult> {
     const start = Date.now();
     const changedIds = await ws.indexWriter.updateFiles(files);
 
-    const embedded = changedIds.length > 0
-      ? await this.embedIfAvailable(changedIds, ws)
-      : 0;
-
     if (changedIds.length > 0) {
+      // Graphs first — call graph data enriches embedding chunks
       await this.rebuildGraphs(ws, wsPath);
+      const embedded = await this.embedIfAvailable(changedIds, ws);
       await ws.indexWriter.saveToDisk();
+      return { mode: "specific_files", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
     }
 
-    return { mode: "specific_files", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
+    return { mode: "specific_files", changedFunctions: 0, embedded: 0, elapsedMs: Date.now() - start };
   }
 
   async handleFileChanges(ws: WorkspaceServices, wsPath: string, changedFiles: string[]): Promise<void> {
@@ -75,16 +75,7 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
       await ws.vectorDb.deleteByIds(deletedIds);
     }
 
-    // Re-embed changed functions
-    try {
-      if (await this.embedding.isAvailable()) {
-        await reembedFunctions(changedIds, ws.index, this.embedding, ws.vectorDb, this.config);
-      }
-    } catch (err) {
-      logger.warn({ err }, "Watcher re-embed failed");
-    }
-
-    // Incremental graph rebuild for affected files
+    // Incremental graph rebuild for affected files — BEFORE re-embedding
     const changedFilePaths = Array.from(new Set(
       changedIds.map(id => ws.index.getById(id)?.filePath).filter(Boolean) as string[]
     ));
@@ -103,6 +94,16 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
     // Type graph first — call graph uses it for interface-based resolution
     await ws.typeGraphWriter.buildForFiles(changedFilePaths, ws.index, this.parsers, ws.projectRoot);
     await ws.callGraphWriter.buildForFiles(changedFilePaths, ws.index, ws.projectRoot);
+
+    // Re-embed changed functions (now has updated call graph for chunk enrichment)
+    try {
+      if (await this.embedding.isAvailable()) {
+        await reembedFunctions(changedIds, ws.index, this.embedding, ws.vectorDb, this.config, ws.callGraph);
+      }
+    } catch (err) {
+      logger.warn({ err }, "Watcher re-embed failed");
+    }
+
     await ws.indexWriter.saveToDisk();
     await this.saveGraphs(ws, wsPath);
 
@@ -114,7 +115,7 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
   private async embedIfAvailable(ids: string[], ws: WorkspaceServices): Promise<number> {
     try {
       if (await this.embedding.isAvailable()) {
-        await reembedFunctions(ids, ws.index, this.embedding, ws.vectorDb, this.config);
+        await reembedFunctions(ids, ws.index, this.embedding, ws.vectorDb, this.config, ws.callGraph);
         return ids.length;
       }
     } catch (err) {

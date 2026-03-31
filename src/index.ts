@@ -113,10 +113,12 @@ async function main() {
 
     const stats = ws.index.getStats();
     let staleIds: string[] = [];
+    let freshBuild = false;
     if (stats.files === 0) {
       logger.info({ workspace: wsPath }, "Empty index, building...");
       await ws.indexWriter.buildFull(ws.projectRoot);
       await ws.indexWriter.saveToDisk();
+      freshBuild = true;
       const newStats = ws.index.getStats();
       logger.info({ workspace: wsPath, ...newStats }, "Index built");
     } else {
@@ -136,27 +138,7 @@ async function main() {
     const vectorCount = await ws.vectorDb.countRows();
     logger.info({ workspace: wsPath, vectorCount }, "Vector DB initialized");
 
-    // Embed if Ollama available and vectors empty
-    if (services.embeddingAvailable && vectorCount === 0) {
-      logger.info({ workspace: wsPath }, "Embedding all functions...");
-      const allIds = ws.index.getAllFilePaths().flatMap(fp => ws.index.getFileRecordIds(fp));
-      await reembedFunctions(allIds, ws.index, services.embedding, ws.vectorDb, services.config);
-      const newCount = await ws.vectorDb.countRows();
-      logger.info({ workspace: wsPath, embedded: newCount }, "Embedding complete");
-    } else if (services.embeddingAvailable && staleIds.length > 0) {
-      // Re-embed stale functions + clean orphan vectors for deleted ones
-      const deletedIds = staleIds.filter(id => !ws.index.getById(id));
-      const changedIds = staleIds.filter(id => ws.index.getById(id));
-      if (deletedIds.length > 0) {
-        await ws.vectorDb.deleteByIds(deletedIds);
-      }
-      if (changedIds.length > 0) {
-        await reembedFunctions(changedIds, ws.index, services.embedding, ws.vectorDb, services.config);
-      }
-      logger.info({ workspace: wsPath, reembedded: changedIds.length, deleted: deletedIds.length }, "Stale vectors updated");
-    }
-
-    // Load or build call graph + type graph
+    // Graphs BEFORE embedding — call graph data enriches embedding chunks
     const graphCacheDir = wsPath === "."
       ? path.join(services.config.projectRoot, ".code-context")
       : path.join(services.config.projectRoot, ".code-context", wsPath);
@@ -178,6 +160,27 @@ async function main() {
     const tgStats = ws.typeGraph.getStats();
     logger.info({ workspace: wsPath, ...cgStats, ...tgStats, fromCache: cgLoaded && tgLoaded },
       cgLoaded && tgLoaded ? "Graphs loaded from cache" : "Graphs built");
+
+    // Embed — now has call graph available for chunk enrichment
+    // freshBuild: after cache version bump, old vectors are stale — rebuild all
+    if (services.embeddingAvailable && (vectorCount === 0 || freshBuild)) {
+      logger.info({ workspace: wsPath }, "Embedding all functions...");
+      const allIds = ws.index.getAllFilePaths().flatMap(fp => ws.index.getFileRecordIds(fp));
+      await reembedFunctions(allIds, ws.index, services.embedding, ws.vectorDb, services.config, ws.callGraph);
+      const newCount = await ws.vectorDb.countRows();
+      logger.info({ workspace: wsPath, embedded: newCount }, "Embedding complete");
+    } else if (services.embeddingAvailable && staleIds.length > 0) {
+      // Re-embed stale functions + clean orphan vectors for deleted ones
+      const deletedIds = staleIds.filter(id => !ws.index.getById(id));
+      const changedIds = staleIds.filter(id => ws.index.getById(id));
+      if (deletedIds.length > 0) {
+        await ws.vectorDb.deleteByIds(deletedIds);
+      }
+      if (changedIds.length > 0) {
+        await reembedFunctions(changedIds, ws.index, services.embedding, ws.vectorDb, services.config, ws.callGraph);
+      }
+      logger.info({ workspace: wsPath, reembedded: changedIds.length, deleted: deletedIds.length }, "Stale vectors updated");
+    }
   }
 
   // Start file watcher — auto-reindex on file changes
