@@ -17,60 +17,7 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
     this.graph.clear();
 
     for (const filePath of index.getAllFilePaths()) {
-      const parser = parsers.find(p => p.canParse(filePath));
-      if (!parser) continue;
-
-      const absPath = path.join(projectRoot, filePath);
-      let source: string;
-      try {
-        source = await readFile(absPath);
-      } catch { continue; }
-
-      const typeRels = parser.parseTypeRelationships(source, filePath);
-
-      for (const rel of typeRels) {
-        // Class/struct node
-        this.ensureNode(rel.className, rel.kind, filePath, rel.lineStart, rel.lineEnd);
-        const classId = `${filePath}::${rel.className}`;
-
-        // implements
-        for (const iface of rel.implements) {
-          const node = this.ensureNode(iface, "interface", "", 0, 0);
-          if (!node.implementors.includes(classId)) node.implementors.push(classId);
-        }
-
-        // extends
-        for (const base of rel.extends) {
-          const node = this.ensureNode(base, "class", "", 0, 0);
-          if (!node.extenders.includes(classId)) node.extenders.push(classId);
-        }
-
-        // usesTypes
-        for (const typeName of rel.usesTypes) {
-          const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-          if (!node.usedBy.includes(classId)) node.usedBy.push(classId);
-        }
-
-        // members (interface properties, constructor field types)
-        if (rel.members) {
-          const node = this.graph.get(rel.className);
-          if (node) {
-            for (const m of rel.members) {
-              node.members[m.name] = m.type;
-            }
-          }
-        }
-      }
-
-      // Also track function-level type usages from typeRelationships on records
-      for (const rec of index.getByFile(filePath)) {
-        if (rec.typeRelationships) {
-          for (const typeName of rec.typeRelationships.usesTypes) {
-            const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-            if (!node.usedBy.includes(rec.id)) node.usedBy.push(rec.id);
-          }
-        }
-      }
+      await this.processFile(filePath, index, parsers, projectRoot);
     }
 
     return this.graph;
@@ -88,52 +35,7 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
     }
 
     for (const filePath of files) {
-      const parser = parsers.find(p => p.canParse(filePath));
-      if (!parser) continue;
-
-      const absPath = path.join(projectRoot, filePath);
-      let source: string;
-      try {
-        source = await readFile(absPath);
-      } catch { continue; }
-
-      const typeRels = parser.parseTypeRelationships(source, filePath);
-
-      for (const rel of typeRels) {
-        this.ensureNode(rel.className, rel.kind, filePath, rel.lineStart, rel.lineEnd);
-        const classId = `${filePath}::${rel.className}`;
-
-        for (const iface of rel.implements) {
-          const node = this.ensureNode(iface, "interface", "", 0, 0);
-          if (!node.implementors.includes(classId)) node.implementors.push(classId);
-        }
-        for (const base of rel.extends) {
-          const node = this.ensureNode(base, "class", "", 0, 0);
-          if (!node.extenders.includes(classId)) node.extenders.push(classId);
-        }
-        for (const typeName of rel.usesTypes) {
-          const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-          if (!node.usedBy.includes(classId)) node.usedBy.push(classId);
-        }
-
-        if (rel.members) {
-          const node = this.graph.get(rel.className);
-          if (node) {
-            for (const m of rel.members) {
-              node.members[m.name] = m.type;
-            }
-          }
-        }
-      }
-
-      for (const rec of index.getByFile(filePath)) {
-        if (rec.typeRelationships) {
-          for (const typeName of rec.typeRelationships.usesTypes) {
-            const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-            if (!node.usedBy.includes(rec.id)) node.usedBy.push(rec.id);
-          }
-        }
-      }
+      await this.processFile(filePath, index, parsers, projectRoot);
     }
   }
 
@@ -234,6 +136,65 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
   }
 
   // === Private ===
+
+  /**
+   * Process a single file: extract type relationships and add to graph.
+   * Shared by build() and buildForFiles() to avoid duplication.
+   */
+  private async processFile(
+    filePath: string,
+    index: IFunctionIndexReader,
+    parsers: ILanguageParser[],
+    projectRoot: string,
+  ): Promise<void> {
+    const parser = parsers.find(p => p.canParse(filePath));
+    if (!parser) return;
+
+    const absPath = path.join(projectRoot, filePath);
+    let source: string;
+    try {
+      source = await readFile(absPath);
+    } catch { return; }
+
+    const typeRels = parser.parseTypeRelationships(source, filePath);
+
+    for (const rel of typeRels) {
+      this.ensureNode(rel.className, rel.kind, filePath, rel.lineStart, rel.lineEnd);
+      const classId = `${filePath}::${rel.className}`;
+
+      for (const iface of rel.implements) {
+        const node = this.ensureNode(iface, "interface", "", 0, 0);
+        if (!node.implementors.includes(classId)) node.implementors.push(classId);
+      }
+      for (const base of rel.extends) {
+        const node = this.ensureNode(base, "class", "", 0, 0);
+        if (!node.extenders.includes(classId)) node.extenders.push(classId);
+      }
+      for (const typeName of rel.usesTypes) {
+        const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
+        if (!node.usedBy.includes(classId)) node.usedBy.push(classId);
+      }
+
+      if (rel.members) {
+        const node = this.graph.get(rel.className);
+        if (node) {
+          for (const m of rel.members) {
+            node.members[m.name] = m.type;
+          }
+        }
+      }
+    }
+
+    // Also track function-level type usages from typeRelationships on records
+    for (const rec of index.getByFile(filePath)) {
+      if (rec.typeRelationships) {
+        for (const typeName of rec.typeRelationships.usesTypes) {
+          const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
+          if (!node.usedBy.includes(rec.id)) node.usedBy.push(rec.id);
+        }
+      }
+    }
+  }
 
   private ensureNode(
     name: string, kind: TypeNode["kind"],

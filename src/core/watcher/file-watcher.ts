@@ -11,7 +11,6 @@ export class FileWatcher implements IFileWatcher {
   private minIntervalTimer: NodeJS.Timeout | null = null;
   private lastFlushTime: number = 0;
   private flushing: boolean = false;
-  private flushQueued: boolean = false;
   private _isRunning: boolean = false;
   private supportedExtensions: string[];
   private ignoreFilter: ReturnType<typeof ignore.default>;
@@ -92,7 +91,6 @@ export class FileWatcher implements IFileWatcher {
 
   private async tryFlush(): Promise<void> {
     if (this.flushing) {
-      this.flushQueued = true;
       return;
     }
 
@@ -112,7 +110,6 @@ export class FileWatcher implements IFileWatcher {
       logger.error({ err }, "FileWatcher flush error");
     } finally {
       this.flushing = false;
-      this.flushQueued = false;
 
       if (this.pendingChanges.size > 0) {
         this.scheduleFlush();

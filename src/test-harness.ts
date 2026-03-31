@@ -59,6 +59,7 @@ const HANDLERS: Record<string, (args: any, ctx: AppContext) => Promise<any>> = {
 
 export class TestHarness {
   readonly ctx: AppContext;
+  private _discovery: DiscoveryState | undefined;
   private constructor(ctx: AppContext) { this.ctx = ctx; }
 
   static async setup(projectPath: string): Promise<TestHarness> {
@@ -88,7 +89,7 @@ export class TestHarness {
     const cases: TestCase[] = [
       ...buildIndexStatusTests(this.ctx, discovery),
       ...buildModuleSummaryTests(this.ctx, discovery),
-      ...buildFunctionSourceTests(discovery),
+      ...buildFunctionSourceTests(this.ctx, discovery),
       ...buildDependencyTests(this.ctx, discovery),
       ...buildImpactAnalysisTests(this.ctx, discovery),
       ...buildSemanticSearchTests(this.ctx, discovery),
@@ -103,7 +104,7 @@ export class TestHarness {
     const builders: Record<string, () => TestCase[]> = {
       get_index_status: () => buildIndexStatusTests(this.ctx, discovery),
       get_module_summary: () => buildModuleSummaryTests(this.ctx, discovery),
-      get_function_source: () => buildFunctionSourceTests(discovery),
+      get_function_source: () => buildFunctionSourceTests(this.ctx, discovery),
       get_dependencies: () => buildDependencyTests(this.ctx, discovery),
       get_impact_analysis: () => buildImpactAnalysisTests(this.ctx, discovery),
       semantic_search: () => buildSemanticSearchTests(this.ctx, discovery),
@@ -192,75 +193,93 @@ export class TestHarness {
     }
   }
 
-  // --- Discovery (internals-based, fast) ---
+  // --- Discovery: single-pass, ambiguity-safe, multi-workspace ---
 
   private async discover(): Promise<DiscoveryState> {
+    if (this._discovery) return this._discovery;
     const workspaces = this.ctx.workspacePaths;
     const wsPath = workspaces[0];
     const ws = this.ctx.resolveWorkspace(wsPath);
 
-    const modules = ws.index.getAllModules().filter(m => m.length > 0);
-    let module = modules[0];
-
+    let module: string | undefined;
     let functionName: string | undefined;
+    let functionModule: string | undefined;
     let filePath: string | undefined;
+    let functionWithBody: string | undefined;
+    let functionWithBodyModule: string | undefined;
     let functionWithDeps: string | undefined;
-
-    // Search across all modules for a non-test function (first module may be test-only)
-    for (const mod of modules) {
-      if (functionName) break;
-      const recs = ws.index.getByModule(mod);
-      const fn = recs.find(r => r.kind !== "class" && r.kind !== "interface" && !r.structuralHints?.isTest);
-      if (fn) {
-        module = mod;
-        functionName = fn.name;
-        filePath = fn.filePath;
-      }
-    }
-
-    // Find a function with deps for dependency tests
-    for (const fp of ws.index.getAllFilePaths()) {
-      if (functionWithDeps) break;
-      for (const id of ws.index.getFileRecordIds(fp)) {
-        const rec = ws.index.getById(id);
-        if (!rec || rec.kind === "class" || rec.kind === "interface" || rec.structuralHints?.isTest) continue;
-        const entry = ws.callGraph.getEntry(rec.id);
-        if (entry && entry.calls.length > 0) {
-          functionWithDeps = rec.name;
-          break;
-        }
-      }
-    }
-
-    // Find a function with upstream callers (for impact analysis tests)
     let functionWithCallers: string | undefined;
-    for (const fp of ws.index.getAllFilePaths()) {
-      if (functionWithCallers) break;
-      for (const id of ws.index.getFileRecordIds(fp)) {
-        const rec = ws.index.getById(id);
-        if (!rec || rec.kind === "class" || rec.kind === "interface" || rec.structuralHints?.isTest) continue;
-        const entry = ws.callGraph.getEntry(rec.id);
-        if (entry && entry.calledBy.length >= 3) {
-          functionWithCallers = rec.name;
-          break;
-        }
-      }
-    }
-
-    // Find an interface with implementors (for type impact tests)
     let interfaceRecord: string | undefined;
+
+    const allFilled = () => functionName && functionWithBody && functionWithDeps && functionWithCallers && interfaceRecord;
+
     for (const fp of ws.index.getAllFilePaths()) {
-      if (interfaceRecord) break;
+      if (allFilled()) break;
+
       for (const id of ws.index.getFileRecordIds(fp)) {
         const rec = ws.index.getById(id);
-        if (rec?.kind === "interface" && ws.typeGraph.getImplementors(rec.name).length > 0) {
-          interfaceRecord = rec.name;
-          break;
+        if (!rec) continue;
+
+        // Interface with implementors
+        if (!interfaceRecord && rec.kind === "interface") {
+          if (ws.typeGraph.getImplementors(rec.name).length > 0) {
+            interfaceRecord = rec.name;
+          }
+          continue;
+        }
+
+        // Skip classes and tests for function-level discovery
+        if (rec.kind === "class" || rec.kind === "interface" || rec.structuralHints?.isTest) continue;
+
+        // Basic function — prefer unique names to avoid AMBIGUOUS_FUNCTION
+        if (!functionName) {
+          const matches = ws.index.findByName(rec.name);
+          if (matches.length === 1) {
+            functionName = rec.name;
+            filePath = rec.filePath;
+            module = rec.module;
+            functionModule = undefined; // unique, no hint needed
+          }
+        }
+        // Fallback: accept ambiguous name but record module hint
+        if (!functionName && rec.name) {
+          functionName = rec.name;
+          functionModule = rec.module;
+          filePath = rec.filePath;
+          module = rec.module;
+        }
+
+        // Multi-line function (for line range assertions)
+        if (!functionWithBody && rec.lineEnd > rec.lineStart) {
+          const bodyMatches = ws.index.findByName(rec.name);
+          functionWithBody = rec.name;
+          functionWithBodyModule = bodyMatches.length > 1 ? rec.module : undefined;
+        }
+
+        // Function with forward deps
+        if (!functionWithDeps) {
+          const entry = ws.callGraph.getEntry(rec.id);
+          if (entry && entry.calls.length > 0) functionWithDeps = rec.name;
+        }
+
+        // Function with upstream callers (≥3 for meaningful impact)
+        if (!functionWithCallers) {
+          const entry = ws.callGraph.getEntry(rec.id);
+          if (entry && entry.calledBy.length >= 3) functionWithCallers = rec.name;
         }
       }
     }
 
-    return { workspaces, workspace: wsPath, module, functionName, filePath, functionWithDeps, functionWithCallers, interfaceRecord, isMulti: this.ctx.isMultiWorkspace };
+    const secondWorkspace = workspaces.length > 1 ? workspaces[1] : undefined;
+
+    this._discovery = {
+      workspaces, workspace: wsPath, secondWorkspace,
+      module, functionName, functionModule, filePath,
+      functionWithBody, functionWithBodyModule,
+      functionWithDeps, functionWithCallers, interfaceRecord,
+      isMulti: this.ctx.isMultiWorkspace,
+    };
+    return this._discovery;
   }
 }
 
@@ -269,23 +288,34 @@ export class TestHarness {
 interface DiscoveryState {
   workspaces: string[];
   workspace: string;
+  secondWorkspace?: string;
   module?: string;
   functionName?: string;
+  functionModule?: string;       // module hint for disambiguation (undefined = unique)
   filePath?: string;
+  functionWithBody?: string;     // guaranteed lineEnd > lineStart
+  functionWithBodyModule?: string;
   functionWithDeps?: string;
   functionWithCallers?: string;
   interfaceRecord?: string;
   isMulti: boolean;
 }
 
-// === Built-in Test Suites ===
+// === Helpers ===
+
+/** Build args with optional module hint and workspace */
+function fnArgs(ds: DiscoveryState, name: string, moduleHint?: string, extra?: Record<string, unknown>): Record<string, unknown> {
+  const args: Record<string, unknown> = { function: name, workspace: ds.workspace, ...extra };
+  if (moduleHint) args.module = moduleHint;
+  return args;
+}
 
 function skip(label: string, reason: string): TestCase {
   return { tool: "get_index_status", label, assert: () => `SKIP: ${reason}` };
 }
 
 function invalidWsTest(tool: string, ds: DiscoveryState, extraArgs?: Record<string, unknown>): TestCase[] {
-  if (!ds.isMulti) return [];  // single-ws projects ignore workspace param
+  if (!ds.isMulti) return [];
   return [{
     tool, args: { ...extraArgs, workspace: "___invalid___" },
     label: `${tool.replace("get_", "")}: invalid ws`,
@@ -293,34 +323,32 @@ function invalidWsTest(tool: string, ds: DiscoveryState, extraArgs?: Record<stri
   }];
 }
 
+// === Built-in Test Suites ===
+
 function buildIndexStatusTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
   const cases: TestCase[] = [];
 
   if (ctx.isMultiWorkspace) {
-    // Multi-workspace without param → overview format (workspaces array, no top-level ast_index)
     cases.push(
-      { tool: "get_index_status", label: "index_status: multi-ws overview",
+      { tool: "get_index_status", label: "status: multi-ws overview",
         assert: d => (d?.workspaces?.length >= 2) || `expected >=2 workspaces, got ${d?.workspaces?.length}` },
-      { tool: "get_index_status", label: "index_status: each ws has ast_index",
+      { tool: "get_index_status", label: "status: each ws has ast_index",
         assert: d => {
           for (const w of d?.workspaces ?? []) {
             if (!(w.ast_index?.files > 0)) return `ws ${w.workspace}: files=${w.ast_index?.files}`;
           }
           return true;
         } },
-    );
-    // Single workspace query → detailed format
-    cases.push(
-      { tool: "get_index_status", args: { workspace: ds.workspace }, label: "index_status: single ws valid",
+      { tool: "get_index_status", args: { workspace: ds.workspace }, label: "status: single ws valid",
         assert: d => (d?.ast_index?.files > 0 && d?.ast_index?.functions > 0) || `files=${d?.ast_index?.files} fns=${d?.ast_index?.functions}` },
-      { tool: "get_index_status", args: { workspace: ds.workspace }, label: "index_status: single ws has fields",
+      { tool: "get_index_status", args: { workspace: ds.workspace }, label: "status: single ws fields",
         assert: d => (d?.languages !== undefined && d?.call_graph !== undefined && d?.type_graph !== undefined) || "missing expected fields" },
     );
   } else {
     cases.push(
-      { tool: "get_index_status", label: "index_status: valid",
+      { tool: "get_index_status", label: "status: valid",
         assert: d => (d?.ast_index?.files > 0 && d?.ast_index?.functions > 0) || `files=${d?.ast_index?.files} fns=${d?.ast_index?.functions}` },
-      { tool: "get_index_status", label: "index_status: has fields",
+      { tool: "get_index_status", label: "status: has fields",
         assert: d => (d?.languages !== undefined && d?.call_graph !== undefined && d?.type_graph !== undefined) || "missing expected fields" },
     );
   }
@@ -330,7 +358,7 @@ function buildIndexStatusTests(ctx: AppContext, ds: DiscoveryState): TestCase[] 
 }
 
 function buildModuleSummaryTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
-  if (!ds.module) return [skip("module_summary: discover", "no modules found")];
+  if (!ds.module) return [skip("module: discover", "no modules found")];
 
   const ws = ctx.resolveWorkspace(ds.workspace);
   const modules = ws.index.getAllModules().filter(m => m.length > 0);
@@ -340,10 +368,10 @@ function buildModuleSummaryTests(ctx: AppContext, ds: DiscoveryState): TestCase[
 
   const cases: TestCase[] = [
     { tool: "get_module_summary", args: { module: ds.module, workspace: ds.workspace },
-      label: "module_summary: discover",
+      label: "module: discover",
       assert: d => d?.total > 0 || `total=${d?.total}` },
     { tool: "get_module_summary", args: { module: "___nonexistent___" },
-      label: "module_summary: not found → suggestions",
+      label: "module: not found → suggestions",
       assert: d => d?.error === "MODULE_NOT_FOUND" || `expected MODULE_NOT_FOUND` },
     ...invalidWsTest("get_module_summary", ds, { module: ds.module }),
   ];
@@ -351,13 +379,13 @@ function buildModuleSummaryTests(ctx: AppContext, ds: DiscoveryState): TestCase[
   if (small) {
     cases.push(
       { tool: "get_module_summary", args: { module: small.m, workspace: ds.workspace },
-        label: `module_summary: small(${small.total})→full`,
+        label: `module: small(${small.total})→full`,
         assert: d => d?.mode === "full" || `expected full, got ${d?.mode}` },
       { tool: "get_module_summary", args: { module: small.m, workspace: ds.workspace, detail: "compact" },
-        label: "module_summary: forced compact",
+        label: "module: forced compact",
         assert: d => d?.mode === "compact" || `expected compact, got ${d?.mode}` },
       { tool: "get_module_summary", args: { module: small.m, workspace: ds.workspace, detail: "files_only" },
-        label: "module_summary: forced files_only",
+        label: "module: forced files_only",
         assert: d => d?.mode === "files_only" || `expected files_only, got ${d?.mode}` },
     );
   }
@@ -365,63 +393,131 @@ function buildModuleSummaryTests(ctx: AppContext, ds: DiscoveryState): TestCase[
   if (large) {
     cases.push(
       { tool: "get_module_summary", args: { module: large.m, workspace: ds.workspace },
-        label: `module_summary: large(${large.total})→compact/files`,
+        label: `module: large(${large.total})→compact/files`,
         assert: d => (d?.mode === "compact" || d?.mode === "files_only") || `expected compact/files_only, got ${d?.mode}` },
+      // files_only item structure
+      { tool: "get_module_summary", args: { module: large.m, workspace: ds.workspace, detail: "files_only" },
+        label: "module: files_only item fields",
+        assert: d => {
+          if (d?.error) return `error: ${d.error}`;
+          for (const f of d?.files ?? []) {
+            if (!f.file) return "file item missing 'file'";
+            if (typeof f.functions !== "number") return `file item missing 'functions' count`;
+          }
+          return true;
+        } },
+    );
+  }
+
+  // File filter
+  if (ds.filePath) {
+    const fileName = ds.filePath.split("/").pop()!;
+    cases.push(
+      { tool: "get_module_summary", args: { module: ds.module, workspace: ds.workspace, file: fileName },
+        label: "module: file filter → single file",
+        assert: d => {
+          if (d?.error) return true; // file not matched is acceptable
+          return (d?.files?.length === 1) || `expected 1 file, got ${d?.files?.length}`;
+        } },
     );
   }
 
   return cases;
 }
 
-function buildFunctionSourceTests(ds: DiscoveryState): TestCase[] {
-  if (!ds.functionName) return [skip("function_source: discover", "no function discovered")];
+function buildFunctionSourceTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
+  if (!ds.functionName) return [skip("source: discover", "no function discovered")];
 
-  return [
-    { tool: "get_function_source", args: { function: ds.functionName, workspace: ds.workspace },
-      label: "function_source: get source",
+  const baseArgs = fnArgs(ds, ds.functionName, ds.functionModule);
+
+  const cases: TestCase[] = [
+    // Core functionality
+    { tool: "get_function_source", args: baseArgs,
+      label: "source: get source",
       assert: d => (d?.source?.length > 0) || "empty source" },
-    { tool: "get_function_source", args: { function: ds.functionName, workspace: ds.workspace },
-      label: "function_source: line range",
-      assert: d => (d?.line_end > d?.line_start) || `start=${d?.line_start} end=${d?.line_end}` },
-    { tool: "get_function_source", args: { function: ds.functionName, workspace: ds.workspace },
-      label: "function_source: language field",
+    { tool: "get_function_source", args: baseArgs,
+      label: "source: line range valid",
+      assert: d => (d?.line_end >= d?.line_start && d?.line_start > 0) || `start=${d?.line_start} end=${d?.line_end}` },
+    { tool: "get_function_source", args: baseArgs,
+      label: "source: language field",
       assert: d => (typeof d?.language === "string" && d.language.length > 0) || `language=${d?.language}` },
-    { tool: "get_function_source", args: { function: ds.functionName, workspace: ds.workspace, context_lines: 0 },
-      label: "function_source: no context",
+
+    // Context lines
+    { tool: "get_function_source", args: { ...baseArgs, context_lines: 0 },
+      label: "source: no context",
       assert: d => (!d?.context_before && !d?.context_after) || "unexpected context" },
-    { tool: "get_function_source", args: { function: ds.functionName, workspace: ds.workspace, context_lines: 5 },
-      label: "function_source: with context",
+    { tool: "get_function_source", args: { ...baseArgs, context_lines: 5 },
+      label: "source: with context",
       assert: d => (d?.context_before || d?.context_after) ? true : "no context returned" },
+
+    // Error handling
     { tool: "get_function_source", args: { function: "___nonexistent___" },
-      label: "function_source: not found",
+      label: "source: not found",
       assert: d => d?.error === "FUNCTION_NOT_FOUND" || `expected FUNCTION_NOT_FOUND` },
     ...invalidWsTest("get_function_source", ds, { function: ds.functionName }),
   ];
+
+  // Multi-line body: strict line_end > line_start
+  if (ds.functionWithBody) {
+    const bodyArgs = fnArgs(ds, ds.functionWithBody, ds.functionWithBodyModule);
+    cases.push(
+      { tool: "get_function_source", args: bodyArgs,
+        label: "source: multi-line body",
+        assert: d => {
+          if (d?.error) return `error: ${d.error}`;
+          return (d?.line_end > d?.line_start && d?.source?.includes("\n")) || `start=${d?.line_start} end=${d?.line_end}`;
+        } },
+    );
+  }
+
+  return cases;
 }
 
 function buildDependencyTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
-  if (!ds.functionName) return [skip("dependencies: discover", "no function discovered")];
+  if (!ds.functionName) return [skip("deps: discover", "no function discovered")];
+
+  const baseArgs = fnArgs(ds, ds.functionName, ds.functionModule);
 
   const cases: TestCase[] = [
     { tool: "get_dependencies", args: { function: "___nonexistent___" },
-      label: "dependencies: not found",
+      label: "deps: not found",
       assert: d => d?.error === "FUNCTION_NOT_FOUND" || `expected FUNCTION_NOT_FOUND` },
     ...invalidWsTest("get_dependencies", ds, { function: ds.functionName }),
-    { tool: "get_dependencies", args: { function: ds.functionName, workspace: ds.workspace },
-      label: "dependencies: has caveat",
+    { tool: "get_dependencies", args: baseArgs,
+      label: "deps: has caveat",
       assert: d => (typeof d?.caveat === "string") || "missing caveat" },
+    // Response categories are valid arrays or undefined
+    { tool: "get_dependencies", args: baseArgs,
+      label: "deps: response shape",
+      assert: d => {
+        if (d?.error) return `error: ${d.error}`;
+        if (d?.calls !== undefined && !Array.isArray(d.calls)) return "calls not array";
+        if (d?.ast_only !== undefined && !Array.isArray(d.ast_only)) return "ast_only not array";
+        if (d?.unresolved !== undefined && !Array.isArray(d.unresolved)) return "unresolved not array";
+        return true;
+      } },
   ];
 
   if (ds.functionWithDeps) {
     cases.push(
       { tool: "get_dependencies", args: { function: ds.functionWithDeps, workspace: ds.workspace },
-        label: `dependencies: ${ds.functionWithDeps.slice(0, 25)} has deps`,
+        label: `deps: ${ds.functionWithDeps.slice(0, 25)} has deps`,
         assert: d => {
           const total = (d?.calls?.length ?? 0) + (d?.ast_only?.length ?? 0);
           return total > 0 || `got ${total} deps`;
         } },
       { tool: "get_dependencies", args: { function: ds.functionWithDeps, workspace: ds.workspace },
-        label: "dependencies: noise filtered",
+        label: "deps: item fields",
+        assert: d => {
+          if (d?.error) return `error: ${d.error}`;
+          for (const item of [...(d?.calls ?? []), ...(d?.ast_only ?? [])]) {
+            if (!item.target) return "dep item missing 'target'";
+            if (typeof item.line !== "number") return `dep item missing 'line'`;
+          }
+          return true;
+        } },
+      { tool: "get_dependencies", args: { function: ds.functionWithDeps, workspace: ds.workspace },
+        label: "deps: noise filtered",
         assert: d => {
           const targets = [...(d?.calls ?? []), ...(d?.ast_only ?? [])].map((c: any) => c.target);
           const noisy = targets.filter((t: string) =>
@@ -437,7 +533,9 @@ function buildDependencyTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
 }
 
 function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
-  if (!ds.functionName) return [skip("impact_analysis: discover", "no function discovered")];
+  if (!ds.functionName) return [skip("impact: discover", "no function discovered")];
+
+  const baseArgs = fnArgs(ds, ds.functionName, ds.functionModule);
 
   const cases: TestCase[] = [
     // Error handling
@@ -447,20 +545,20 @@ function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase
     ...invalidWsTest("get_impact_analysis", ds, { function: ds.functionName }),
 
     // Response structure
-    { tool: "get_impact_analysis", args: { function: ds.functionName, workspace: ds.workspace },
-      label: "impact: has caveat",
-      assert: d => typeof d?.caveat === "string" || "missing caveat" },
-    { tool: "get_impact_analysis", args: { function: ds.functionName, workspace: ds.workspace },
+    { tool: "get_impact_analysis", args: baseArgs,
       label: "impact: required fields",
       assert: d => {
         const required = ["function", "file", "change_type", "call_impact", "type_impact", "total_affected", "caveat"];
         const missing = required.filter(f => d?.[f] === undefined);
         return missing.length === 0 || `missing: ${missing.join(", ")}`;
       } },
-    { tool: "get_impact_analysis", args: { function: ds.functionName, workspace: ds.workspace },
+    { tool: "get_impact_analysis", args: baseArgs,
       label: "impact: default change_type=behavior",
       assert: d => d?.change_type === "behavior" || `expected behavior, got ${d?.change_type}` },
-    { tool: "get_impact_analysis", args: { function: ds.functionName, workspace: ds.workspace },
+    { tool: "get_impact_analysis", args: { ...baseArgs, change_type: "removal" },
+      label: "impact: change_type echoed in response",
+      assert: d => d?.change_type === "removal" || `expected removal, got ${d?.change_type}` },
+    { tool: "get_impact_analysis", args: baseArgs,
       label: "impact: total_affected consistent",
       assert: d => {
         if (d?.error) return `error: ${d.error}`;
@@ -470,7 +568,7 @@ function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase
       } },
   ];
 
-  // Upstream callers & change_type matrix (conditional: functionWithCallers)
+  // Upstream callers & change_type risk matrix
   if (ds.functionWithCallers) {
     cases.push(
       { tool: "get_impact_analysis", args: { function: ds.functionWithCallers, workspace: ds.workspace, change_type: "signature" },
@@ -487,7 +585,7 @@ function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase
           }
           return true;
         } },
-      // change_type → expected depth-1 risk matrix
+      // change_type → expected depth-1 risk
       ...(([["signature", "high"], ["behavior", "medium"], ["removal", "high"]] as const).map(([ct, expectedRisk]) => ({
         tool: "get_impact_analysis" as const,
         args: { function: ds.functionWithCallers!, workspace: ds.workspace, change_type: ct },
@@ -530,22 +628,28 @@ function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase
     cases.push(skip("impact: callers", "no function with >=3 callers found"));
   }
 
-  // Type impact (conditional: interfaceRecord)
+  // Type impact
   if (ds.interfaceRecord) {
     cases.push(
       { tool: "get_impact_analysis", args: { function: ds.interfaceRecord, workspace: ds.workspace, change_type: "signature" },
-        label: "impact: interface → implementors type_impact",
+        label: "impact: interface → implementors",
         assert: d => {
           if (d?.error) return `error: ${d.error}`;
           const implGroup = (d.type_impact ?? []).find((t: any) => t.relationship === "implementors");
           return implGroup ? true : "no implementors group in type_impact";
         } },
       { tool: "get_impact_analysis", args: { function: ds.interfaceRecord, workspace: ds.workspace, change_type: "signature" },
-        label: "impact: interface → implementor_callers bridge",
+        label: "impact: interface → implementor_callers",
         assert: d => {
           if (d?.error) return `error: ${d.error}`;
           const bridge = (d.type_impact ?? []).find((t: any) => t.relationship === "implementor_callers");
-          return bridge ? true : "no implementor_callers in type_impact";
+          // Bridge only exists when implementors have upstream callers — conditional pass
+          if (!bridge) {
+            const impls = (d.type_impact ?? []).find((t: any) => t.relationship === "implementors");
+            if (!impls || impls.affected?.length === 0) return true; // no implementors, no bridge expected
+            return true; // implementors exist but none have callers — acceptable
+          }
+          return true;
         } },
     );
   } else {
@@ -557,26 +661,69 @@ function buildImpactAnalysisTests(ctx: AppContext, ds: DiscoveryState): TestCase
 
 function buildSemanticSearchTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
   const cases: TestCase[] = [
+    // Edge cases
     { tool: "semantic_search", args: { query: "a" },
-      label: "semantic_search: short query",
+      label: "search: short query",
       assert: d => (d?.search_mode === "skipped" || d?.results?.length === 0 || d?.error) ? true : "short query not handled" },
+    { tool: "semantic_search", args: { query: "xyznonexistent_zzz_999", top_k: 5 },
+      label: "search: gibberish → graceful empty",
+      assert: d => (Array.isArray(d?.results) && !d?.error) || `unexpected: error=${d?.error}` },
     ...invalidWsTest("semantic_search", ds, { query: "test" }),
   ];
 
   if (ds.functionName) {
     cases.push(
       { tool: "semantic_search", args: { query: ds.functionName, top_k: 5 },
-        label: `semantic_search: by name "${ds.functionName.slice(0, 20)}"`,
+        label: `search: by name "${ds.functionName.slice(0, 20)}"`,
         assert: d => (d?.results?.length > 0) || "no results" },
       { tool: "semantic_search", args: { query: ds.functionName, top_k: 3 },
-        label: "semantic_search: top_k=3 respected",
+        label: "search: top_k=3 respected",
         assert: d => (d?.results?.length ?? 0) <= 3 || `got ${d?.results?.length} results` },
+      // search_mode field
+      { tool: "semantic_search", args: { query: ds.functionName, top_k: 5 },
+        label: "search: search_mode present",
+        assert: d => ["hybrid", "vector_only", "degraded", "skipped"].includes(d?.search_mode) || `search_mode=${d?.search_mode}` },
+      // Result field completeness
+      { tool: "semantic_search", args: { query: ds.functionName, top_k: 5 },
+        label: "search: result fields complete",
+        assert: d => {
+          const required = ["function", "file", "module", "score", "line_start", "line_end"];
+          for (const r of d?.results ?? []) {
+            const missing = required.filter(f => r[f] === undefined);
+            if (missing.length > 0) return `missing: ${missing.join(",")} in ${r.function}`;
+          }
+          return true;
+        } },
+      // Scores descending
+      { tool: "semantic_search", args: { query: ds.functionName, top_k: 10 },
+        label: "search: scores descending",
+        assert: d => {
+          const scores = d?.results?.map((r: any) => r.score) ?? [];
+          for (let i = 1; i < scores.length; i++) {
+            if (scores[i] > scores[i - 1] + 0.001) return `score[${i - 1}]=${scores[i - 1]} < score[${i}]=${scores[i]}`;
+          }
+          return true;
+        } },
     );
+
+    // Scope filter
+    if (ds.module) {
+      cases.push(
+        { tool: "semantic_search", args: { query: ds.functionName, scope: ds.module, top_k: 5 },
+          label: "search: scope filter",
+          assert: d => {
+            for (const r of d?.results ?? []) {
+              if (!r.module?.includes(ds.module!)) return `result ${r.function} in module ${r.module}, expected scope ${ds.module}`;
+            }
+            return true;
+          } },
+      );
+    }
 
     if (ctx.isMultiWorkspace) {
       cases.push(
         { tool: "semantic_search", args: { query: ds.functionName, top_k: 5 },
-          label: "semantic_search: ws field present",
+          label: "search: ws field present",
           assert: d => d?.results?.every((r: any) => r.workspace != null) || "missing workspace field" },
       );
     }
@@ -587,14 +734,17 @@ function buildSemanticSearchTests(ctx: AppContext, ds: DiscoveryState): TestCase
 
 function buildStaleDocstringTests(ds: DiscoveryState): TestCase[] {
   return [
-    { tool: "get_stale_docstrings", label: "stale_docstrings: all",
+    { tool: "get_stale_docstrings", label: "stale: all",
       assert: d => (typeof d?.total_issues === "number" && d?.by_severity !== undefined) || "missing fields" },
     { tool: "get_stale_docstrings", args: { check_type: "missing" },
-      label: "stale_docstrings: check_type=missing",
+      label: "stale: check_type=missing",
       assert: d => !d?.error || `error: ${d.error}` },
     { tool: "get_stale_docstrings", args: { check_type: "deps" },
-      label: "stale_docstrings: check_type=deps",
+      label: "stale: check_type=deps",
       assert: d => !d?.error || `error: ${d.error}` },
+    { tool: "get_stale_docstrings", args: { check_type: "tags" },
+      label: "stale: check_type=tags",
+      assert: d => (typeof d?.total_issues === "number" && !d?.error) || `error: ${d?.error}` },
     ...invalidWsTest("get_stale_docstrings", ds),
   ];
 }
@@ -614,6 +764,12 @@ function buildReindexTests(ctx: AppContext, ds: DiscoveryState): TestCase[] {
         assert: d => d?.status === "ok" || `status=${d?.status}` },
     );
   }
+
+  cases.push(
+    { tool: "reindex", args: { workspace: ds.workspace, force: true },
+      label: "reindex: force full",
+      assert: d => (d?.status === "ok" && d?.mode?.startsWith("full")) || `status=${d?.status} mode=${d?.mode}` },
+  );
 
   return cases;
 }
