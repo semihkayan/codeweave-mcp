@@ -28,10 +28,15 @@ export async function handleModuleSummary(
       }
     }
     const suggestions = findSimilar(args.module, allModules, { mode: "path" });
+    const examples = Array.from(allModules).slice(0, 5);
+
+    const hints: string[] = [];
+    if (suggestions.length > 0) hints.push(`Did you mean: ${suggestions.join(", ")}?`);
+    if (examples.length > 0) hints.push(`Available modules include: ${examples.join(", ")}`);
 
     return errorResponse("MODULE_NOT_FOUND",
       `Module '${args.module}' not found${resolved.workspaces.length > 1 ? " in any workspace" : ""}.`,
-      suggestions.length > 0 ? `Did you mean: ${suggestions.join(", ")}?` : undefined
+      hints.length > 0 ? hints.join(" ") : undefined,
     );
   }
 

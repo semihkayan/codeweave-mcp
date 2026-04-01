@@ -2,6 +2,7 @@ import type { AppContext, WorkspaceServices, LanguageConventions } from "../type
 import type { FunctionRecord } from "../types/index.js";
 import { resolveWorkspaces, textResponse } from "./tool-utils.js";
 import { applyDensityAdjustment, countParamsFromSignature } from "./density-scorer.js";
+import { normalizeModuleQuery } from "../utils/file-utils.js";
 
 const MIN_SCORE = 0.4;
 
@@ -210,6 +211,11 @@ export async function handleSemanticSearch(
     return textResponse({ results: [], total_indexed: 0, search_mode: "skipped", note: "Query too short. Use at least 2 characters." });
   }
 
+  // Normalize scope: strip source root prefixes, convert dot notation
+  const scope = args.scope
+    ? normalizeModuleQuery(args.scope, ctx.config.parser.sourceRoot, ctx.conventions.sourceRoots).pop()!
+    : undefined;
+
   // Search all resolved workspaces and merge results
   const allResults: EnrichedResult[] = [];
   let totalDesync = 0;
@@ -219,7 +225,7 @@ export async function handleSemanticSearch(
   for (const { ws, wsPath } of resolved.workspaces) {
     const { results, desyncCount } = await searchSingleWorkspace(
       ws, wsPath, query, topK,
-      { scope: args.scope, tags_filter: args.tags_filter, side_effects_filter: args.side_effects_filter },
+      { scope, tags_filter: args.tags_filter, side_effects_filter: args.side_effects_filter },
       ctx,
     );
     allResults.push(...results);
