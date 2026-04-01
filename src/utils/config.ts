@@ -31,6 +31,7 @@ const ConfigSchema = z.object({
       "**/dist/**",
       "**/build/**",
       "**/*.min.js",
+      "**/*.d.ts",
       "**/*.generated.*",
       "**/vendor/**",
       "**/.git/**",

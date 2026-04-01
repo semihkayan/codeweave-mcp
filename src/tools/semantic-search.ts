@@ -155,14 +155,7 @@ async function searchSingleWorkspace(
     }
   );
 
-  // Filter out build artifacts, test fixtures, declaration files, and low-relevance noise
-  const candidates = rawResults
-    .filter(r =>
-      !r.filePath.startsWith("dist/") &&
-      !r.filePath.startsWith("test/fixtures/") &&
-      !r.filePath.endsWith(".d.ts")
-    )
-    .filter(r => r.score >= MIN_SCORE);
+  const candidates = rawResults.filter(r => r.score >= MIN_SCORE);
 
   // Enrich ALL candidates — density adjustment needs the full pool to rerank properly.
   let desyncCount = 0;
