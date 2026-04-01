@@ -265,6 +265,14 @@ my-project/
 
 Each workspace gets its own isolated index, call graph, type graph, and vector store. Tools accept an optional `workspace` parameter — omit it to search across all workspaces.
 
+## Git Worktree Support
+
+CodeWeave automatically detects git worktrees (including Claude Code's `/worktree`). On first start in a worktree, it copies the main repo's cache for a fast warm start (~2s instead of 30s+). After that, each worktree maintains its own fully isolated index.
+
+- **Automatic** — no configuration needed
+- **Isolated** — worktree changes don't affect the main repo's cache
+- **Incremental** — only files that differ from the main branch are re-parsed and re-embedded
+
 ## Requirements
 
 - **Node.js 20+**
