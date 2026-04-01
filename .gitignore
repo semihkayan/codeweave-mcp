@@ -3,4 +3,5 @@ dist/
 .code-context/
 *.log
 .DS_Store
+.claude/worktrees/
 feedback.md
