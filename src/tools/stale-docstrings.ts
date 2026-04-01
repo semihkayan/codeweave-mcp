@@ -1,5 +1,6 @@
 import type { AppContext, WorkspaceServices } from "../types/interfaces.js";
 import { resolveWorkspaces, textResponse } from "./tool-utils.js";
+import { normalizeModuleQuery } from "../utils/file-utils.js";
 
 function checkWorkspace(
   ws: WorkspaceServices,
@@ -7,13 +8,14 @@ function checkWorkspace(
   scope: string | undefined,
   checkType: string,
   showWorkspace: boolean,
+  scopeCandidates: string[] | null,
 ) {
   const issues: Array<{
     function: string; file: string; line: number; issue: string; severity: string; workspace?: string;
   }> = [];
 
   for (const filePath of ws.index.getAllFilePaths()) {
-    if (scope && !filePath.startsWith(scope)) continue;
+    if (scopeCandidates && !scopeCandidates.some(s => filePath.startsWith(s))) continue;
 
     for (const id of ws.index.getFileRecordIds(filePath)) {
       const record = ws.index.getById(id);
@@ -102,8 +104,22 @@ export async function handleStaleDocstrings(
     function: string; file: string; line: number; issue: string; severity: string; workspace?: string;
   }> = [];
 
+  // Pre-compute filePath-compatible scope candidates
+  let scopeCandidates: string[] | null = null;
+  if (args.scope) {
+    const normalized = normalizeModuleQuery(args.scope, ctx.config.parser.sourceRoot, ctx.conventions.sourceRoots);
+    // Include original + normalized + expanded (prepend language roots for filePath matching)
+    const expanded = normalized.flatMap(c =>
+      ctx.conventions.sourceRoots.map(root => {
+        const r = root.endsWith("/") ? root : root + "/";
+        return r + c;
+      })
+    );
+    scopeCandidates = [...new Set([...normalized, ...expanded])];
+  }
+
   for (const { ws, wsPath } of resolved.workspaces) {
-    const issues = checkWorkspace(ws, wsPath, args.scope, checkType, showWorkspace);
+    const issues = checkWorkspace(ws, wsPath, args.scope, checkType, showWorkspace, scopeCandidates);
     allIssues.push(...issues);
   }
 

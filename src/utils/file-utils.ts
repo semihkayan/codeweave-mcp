@@ -77,6 +77,61 @@ export function computeModule(filePath: string, projectRoot: string, sourceRoot?
   return dir === "." ? "" : dir.replace(/\\/g, "/");
 }
 
+/**
+ * Generate candidate module paths from user input by normalizing and stripping source root prefixes.
+ * Mirrors the stripping done by computeModule() during indexing — converts user's filesystem-style
+ * path back to the stored module format.
+ *
+ * Returns candidates ordered: original first, most-stripped last.
+ */
+export function normalizeModuleQuery(
+  query: string,
+  configSourceRoot: string | undefined,
+  languageSourceRoots: readonly string[],
+): string[] {
+  const candidates: string[] = [];
+
+  // Step 0: normalize slashes, trim trailing slash
+  let q = query.replace(/\\/g, "/").replace(/\/+$/, "");
+  candidates.push(q);
+
+  // Step 1: dot-to-slash — only when input has dots and no slashes (namespace notation)
+  if (q.includes(".") && !q.includes("/")) {
+    candidates.push(q.replace(/\./g, "/"));
+  }
+
+  // Step 2: strip language source root prefixes from each candidate so far
+  const expanded: string[] = [];
+  for (const c of candidates) {
+    for (const root of languageSourceRoots) {
+      const normalized = root.endsWith("/") ? root : root + "/";
+      if (c.startsWith(normalized)) {
+        expanded.push(c.slice(normalized.length));
+      }
+    }
+  }
+
+  // Step 3: strip partial language roots — when configSourceRoot already stripped its prefix
+  // e.g., languageRoot="src/main/java/", configSourceRoot="src" → remainder="main/java/"
+  if (configSourceRoot) {
+    const cfgPrefix = configSourceRoot + "/";
+    for (const c of candidates) {
+      for (const root of languageSourceRoots) {
+        const normalized = root.endsWith("/") ? root : root + "/";
+        if (normalized.startsWith(cfgPrefix)) {
+          const remainder = normalized.slice(cfgPrefix.length);
+          if (remainder && c.startsWith(remainder)) {
+            expanded.push(c.slice(remainder.length));
+          }
+        }
+      }
+    }
+  }
+
+  // Deduplicate while preserving order
+  return [...new Set([...candidates, ...expanded])];
+}
+
 // Detect language from file extension
 export function detectLanguage(filePath: string, languages: Record<string, string[]>): string | null {
   for (const [lang, exts] of Object.entries(languages)) {

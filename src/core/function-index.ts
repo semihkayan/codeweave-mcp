@@ -8,7 +8,7 @@ import type {
   TestDetectionMetadata, LanguageConventions,
 } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
-import { readFile, computeModule, detectLanguage } from "../utils/file-utils.js";
+import { readFile, computeModule, detectLanguage, normalizeModuleQuery } from "../utils/file-utils.js";
 import { globSourceFiles } from "../utils/file-utils.js";
 import { decomposeIdentifier } from "../utils/string-similarity.js";
 
@@ -98,6 +98,17 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       }
     }
 
+    // Language source root normalization: strip language-specific prefixes (e.g., "src/main/java/")
+    // and convert dot notation (e.g., "com.wordbox.list" → "com/wordbox/list")
+    if (results.length === 0) {
+      const candidates = normalizeModuleQuery(module, this.config.parser.sourceRoot, this.conventions.sourceRoots);
+      for (const candidate of candidates) {
+        if (candidate === module) continue; // already tried in level 1
+        results = this.getByModuleExact(candidate);
+        if (results.length > 0) break;
+      }
+    }
+
     return results;
   }
 
@@ -155,9 +166,23 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       if (n.endsWith(dotSuffix)) suffixIds.push(...ids);
     }
     const allIds = [...new Set([...directIds, ...suffixIds])];
-    return allIds
-      .map(id => this.records.get(id)!)
-      .filter(rec => rec && (!module || rec.module === module || rec.module.startsWith(`${module}/`)));
+    const allRecords = allIds.map(id => this.records.get(id)!).filter(Boolean);
+
+    if (!module) return allRecords;
+
+    // Try exact module match first
+    const exact = allRecords.filter(rec => rec.module === module || rec.module.startsWith(`${module}/`));
+    if (exact.length > 0) return exact;
+
+    // Normalize module query and retry with each candidate
+    const candidates = normalizeModuleQuery(module, this.config.parser.sourceRoot, this.conventions.sourceRoots);
+    for (const candidate of candidates) {
+      if (candidate === module) continue; // already tried above
+      const filtered = allRecords.filter(rec => rec.module === candidate || rec.module.startsWith(`${candidate}/`));
+      if (filtered.length > 0) return filtered;
+    }
+
+    return [];
   }
 
   findByExactName(name: string): FunctionRecord[] {

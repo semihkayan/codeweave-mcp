@@ -7,14 +7,14 @@ const workspace = z.string().optional().describe(
 export const SemanticSearchSchema = z.object({
   query: z.string().min(1).describe("Natural language description of what you're looking for (e.g., 'payment processing', 'user authentication middleware', 'how orders are validated')"),
   workspace,
-  scope: z.string().optional().describe("Limit search to a specific directory path (e.g., 'payments', 'domain/order'). Omit to search entire codebase."),
+  scope: z.string().optional().describe("Limit search to a specific directory path (e.g., 'payments', 'domain/order'). Source root prefixes are automatically stripped. Dot notation supported (e.g., 'com.example.service'). Omit to search entire codebase."),
   top_k: z.number().int().min(1).max(100).default(10).describe("Number of results to return (1-100, default 10)"),
   tags_filter: z.array(z.string()).optional().describe("Only return functions with ALL of these @tags (AND logic). Tags come from docstring annotations."),
   side_effects_filter: z.array(z.string()).optional().describe("Only return functions with ANY of these side effects (OR logic). Values: database_read, database_write, external_api_call, modifies_state, sends_notification, file_io"),
 });
 
 export const ModuleSummarySchema = z.object({
-  module: z.string().min(1).describe("Directory path relative to project root (e.g., 'payments', 'domain/order', 'src/components'). Returns all functions in this directory and subdirectories."),
+  module: z.string().min(1).describe("Module directory path (e.g., 'payments', 'domain/order'). Source root prefixes are automatically stripped. Dot notation is converted to path separators (e.g., 'com.example.service' → 'com/example/service'). Returns all functions in this directory and subdirectories."),
   workspace,
   file: z.string().optional().describe("Focus on a single file within the module (e.g., 'checkout.py'). Omit to see the entire module."),
   detail: z.enum(["auto", "full", "compact", "files_only"]).default("auto").describe("Detail level: 'auto' adapts to module size (default), 'full' shows signatures+summary+tags, 'compact' shows signatures only, 'files_only' shows file list with function counts."),
@@ -42,7 +42,7 @@ export const ImpactAnalysisSchema = z.object({
 
 export const StaleDocstringsSchema = z.object({
   workspace,
-  scope: z.string().optional().describe("Limit check to a directory (e.g., 'payments')"),
+  scope: z.string().optional().describe("Limit check to a directory (e.g., 'payments', 'domain/order'). Source root prefixes are automatically stripped. Dot notation supported (e.g., 'com.example.service')."),
   check_type: z.enum(["all", "deps", "tags", "missing"]).default("all").describe("What to check: 'all' (default), 'deps' (only @deps accuracy), 'tags' (only missing @tags), 'missing' (only functions without any docstring)"),
 });
 
