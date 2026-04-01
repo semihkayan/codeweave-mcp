@@ -23,6 +23,7 @@ export interface FunctionRecord {
   // Class info
   classInfo?: {
     inherits: string[];
+    implements: string[];
     state: string[];
     pattern: string[];
     methods: string[];
@@ -159,7 +160,7 @@ export interface RawFunctionInfo {
   isAsync: boolean;
   decorators?: string[];
   docstring?: string;
-  classInfo?: { inherits: string[]; methods: string[] };
+  classInfo?: { inherits: string[]; implements?: string[]; methods: string[] };
   paramTypes?: Array<{ name: string; type: string }>;
   structuralHints?: StructuralHints;
 }

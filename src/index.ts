@@ -47,7 +47,7 @@ async function main() {
   }, (args) => handleSemanticSearch(args as any, ctx));
 
   server.registerTool("get_module_summary", {
-    description: "List all functions and classes in a directory with their signatures. Use BEFORE reading files to understand what a module contains — saves tokens by showing metadata without source code. Auto-adapts detail level: full for small modules, compact for large ones.",
+    description: "List all functions and classes in a directory with their signatures. Use BEFORE reading files to understand what a module contains — saves tokens by showing metadata without source code. Auto-adapts detail level: full for small modules, compact for large ones. Use group_by='submodule' for large modules with sub-directories to get per-submodule breakdown with independent detail scaling.",
     inputSchema: ModuleSummarySchema.shape,
   }, (args) => handleModuleSummary(args as any, ctx));
 

@@ -29,6 +29,9 @@ export function buildChunk(
     if (record.classInfo?.inherits?.length) {
       classLine += `, extends ${record.classInfo.inherits.join(", ")}`;
     }
+    if (record.classInfo?.implements?.length) {
+      classLine += `, implements ${record.classInfo.implements.join(", ")}`;
+    }
     if (record.classInfo?.methods?.length) {
       const methods = record.classInfo.methods.map(m => expand(m)).join(", ");
       classLine += `, ${record.classInfo.methods.length} methods: ${methods}`;

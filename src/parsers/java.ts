@@ -148,10 +148,9 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
     const name = node.childForFieldName("name")?.text;
     if (!name) continue;
     const superclass = node.childForFieldName("superclass");
-    const interfaces = node.childForFieldName("interfaces");
-    const inherits: string[] = [];
-    if (superclass) inherits.push(...walkNodes(superclass, ["type_identifier"]).map((t: SyntaxNode) => t.text));
-    if (interfaces) inherits.push(...walkNodes(interfaces, ["type_identifier"]).map((t: SyntaxNode) => t.text));
+    const interfacesNode = node.childForFieldName("interfaces");
+    const inherits: string[] = superclass ? walkNodes(superclass, ["type_identifier"]).map((t: SyntaxNode) => t.text) : [];
+    const impl: string[] = interfacesNode ? walkNodes(interfacesNode, ["type_identifier"]).map((t: SyntaxNode) => t.text) : [];
     // Only direct methods (not from nested classes)
     const body = node.childForFieldName("body");
     const methods = body ? body.children
@@ -159,13 +158,14 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
       .map((m: SyntaxNode) => m.childForFieldName("name")?.text)
       .filter(Boolean) as string[] : [];
 
+    const allParents = [...inherits, ...impl];
     results.push({
       name, kind: "class",
-      signature: `class ${name}${inherits.length > 0 ? ` extends/implements ${inherits.join(", ")}` : ""}`,
+      signature: `class ${name}${allParents.length > 0 ? ` extends/implements ${allParents.join(", ")}` : ""}`,
       lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
       visibility: getVisibility(node), isAsync: false,
       docstring: getJavadoc(node) || undefined,
-      classInfo: { inherits, methods },
+      classInfo: { inherits, implements: impl, methods },
       decorators: getAnnotations(node),
     });
   }

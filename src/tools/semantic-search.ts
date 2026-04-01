@@ -22,8 +22,11 @@ function buildAutoSummary(record: FunctionRecord, conventions?: LanguageConventi
   if (record.kind === "class") {
     const methods = (record.classInfo?.methods || [])
       .filter(m => !conventions?.constructorNames?.has(m));
-    const inheritsInfo = record.classInfo?.inherits?.length
+    const extendsInfo = record.classInfo?.inherits?.length
       ? ` extends ${record.classInfo.inherits.join(", ")}` : "";
+    const implementsInfo = record.classInfo?.implements?.length
+      ? ` implements ${record.classInfo.implements.join(", ")}` : "";
+    const inheritsInfo = `${extendsInfo}${implementsInfo}`;
     const shown = methods.slice(0, 5).join(", ");
     const more = methods.length > 5 ? `, +${methods.length - 5} more` : "";
     return methods.length > 0
