@@ -59,6 +59,10 @@ function extractPrimaryTypeName(typeNode: SyntaxNode): string {
     const element = typeNode.children[0];
     if (element) return extractPrimaryTypeName(element);
   }
+  if (typeNode.type === "qualified_name") {
+    const parts = typeNode.text.split(".");
+    return parts[parts.length - 1];
+  }
   return typeNode.text;
 }
 
@@ -116,7 +120,7 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
     const name = node.childForFieldName("name")?.text;
     if (!name) continue;
     const params = node.childForFieldName("parameters")?.text || "()";
-    const retType = node.childForFieldName("type")?.text || "void";
+    const retType = getMethodReturnType(node)?.text || "void";
     const classNode = findParent(node, "class_declaration") || findParent(node, "struct_declaration");
     const className = classNode?.childForFieldName("name")?.text;
     const fullName = className ? `${className}.${name}` : name;
