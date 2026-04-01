@@ -162,9 +162,12 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
     const name = node.childForFieldName("name")?.text;
     if (!name) continue;
     const basesNode = node.children.find((c: SyntaxNode) => c.type === "base_list");
-    const inherits: string[] = basesNode
+    const allBases: string[] = basesNode
       ? walkNodes(basesNode, ["identifier", "generic_name"]).map((t: SyntaxNode) => t.text)
       : [];
+    // C# convention: interfaces start with I followed by uppercase
+    const impl = allBases.filter(b => b.startsWith("I") && b[1] === b[1]?.toUpperCase());
+    const inherits = allBases.filter(b => !impl.includes(b));
     // FunctionRecord.kind only supports "function" | "method" | "class"
     // But we use "class" for all type declarations — the actual type distinction
     // is captured in TypeGraphManager via extractTypeRelationships
@@ -179,7 +182,7 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
       visibility: getVisibility(node), isAsync: false,
       docstring: getXmlDoc(node) || undefined,
       decorators: getAttributes(node),
-      classInfo: { inherits, methods },
+      classInfo: { inherits, implements: impl, methods },
     });
   }
 

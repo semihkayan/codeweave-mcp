@@ -4,7 +4,7 @@ import { resolveWorkspaces, textResponse, errorResponse } from "./tool-utils.js"
 import { findSimilar } from "../utils/string-similarity.js";
 
 export async function handleModuleSummary(
-  args: { module: string; workspace?: string; file?: string; detail?: string },
+  args: { module: string; workspace?: string; file?: string; detail?: string; group_by?: string },
   ctx: AppContext
 ) {
   const resolved = resolveWorkspaces(ctx, args.workspace);
@@ -45,7 +45,7 @@ export async function handleModuleSummary(
   // Single workspace with results — standard output
   if (wsRecords.length === 1) {
     const { wsPath, records } = wsRecords[0];
-    const result = buildModuleOutput(args.module, records, args.file, args.detail, ctx);
+    const result = buildModuleOutput(args.module, records, args.file, args.detail, args.group_by, ctx);
     if (showWorkspace) (result as any).workspace = wsPath;
     return textResponse(result);
   }
@@ -53,7 +53,7 @@ export async function handleModuleSummary(
   // Multiple workspaces — combine with workspace labels
   const workspaceResults = wsRecords.map(({ wsPath, records }) => ({
     workspace: wsPath,
-    ...buildModuleOutput(args.module, records, args.file, args.detail, ctx),
+    ...buildModuleOutput(args.module, records, args.file, args.detail, args.group_by, ctx),
   }));
 
   return textResponse({
@@ -67,6 +67,7 @@ function buildModuleOutput(
   records: FunctionRecord[],
   file?: string,
   requestedDetail?: string,
+  requestedGroupBy?: string,
   ctx?: AppContext,
 ) {
   // Filter by file if specified
@@ -99,26 +100,66 @@ function buildModuleOutput(
     );
   }
 
-  // Progressive disclosure based on filtered count
   const threshold = ctx?.config.moduleSummary || { compactThreshold: 20, filesOnlyThreshold: 50, maxTokenBudget: 4000 };
-  let mode: string;
-  if (detail === "auto") {
-    if (filtered.length <= threshold.compactThreshold) mode = "full";
-    else if (filtered.length <= threshold.filesOnlyThreshold) mode = "compact";
-    else mode = "files_only";
-  } else {
-    mode = detail;
+  const groupBy = requestedGroupBy || "auto";
+
+  // Determine if submodule grouping should activate
+  const submoduleGroups = groupBySubmodule(filtered);
+  const hasMultipleSubmodules = submoduleGroups.size > 1;
+  const useSubmoduleGrouping = file
+    ? false  // file param overrides — focusing on a single file
+    : groupBy === "submodule"
+      ? hasMultipleSubmodules  // explicit submodule — use if possible, fallback to file if flat
+      : groupBy === "auto"
+        ? hasMultipleSubmodules && filtered.length > threshold.compactThreshold
+        : false;  // group_by=file — always file-based
+
+  if (useSubmoduleGrouping) {
+    // Per-submodule output with independent auto-scaling
+    const submodules = Array.from(submoduleGroups.entries())
+      .sort(([a], [b]) => a === "(root)" ? -1 : b === "(root)" ? 1 : a.localeCompare(b))
+      .map(([submodule, recs]) => {
+        const mode = resolveDetailMode(detail, recs.length, threshold);
+        const built = buildForMode(module, recs, mode);
+        return { submodule, mode, total: recs.length, files: (built as any).files };
+      });
+
+    const result: Record<string, unknown> = {
+      module,
+      group_by: "submodule",
+      total: filtered.length,
+      submodules,
+    };
+    if (testFilesExcluded > 0) result.test_files_excluded = testFilesExcluded;
+    return result;
   }
 
-  const result = mode === "files_only" ? buildFilesOnly(module, filtered)
-    : mode === "compact" ? buildCompact(module, filtered)
-    : buildFull(module, filtered);
+  // File-based grouping (current behavior)
+  const mode = resolveDetailMode(detail, filtered.length, threshold);
+  const result = buildForMode(module, filtered, mode);
 
   if (testFilesExcluded > 0) {
     (result as any).test_files_excluded = testFilesExcluded;
   }
 
   return result;
+}
+
+function resolveDetailMode(
+  detail: string,
+  count: number,
+  threshold: { compactThreshold: number; filesOnlyThreshold: number },
+): string {
+  if (detail !== "auto") return detail;
+  if (count <= threshold.compactThreshold) return "full";
+  if (count <= threshold.filesOnlyThreshold) return "compact";
+  return "files_only";
+}
+
+function buildForMode(module: string, records: FunctionRecord[], mode: string) {
+  if (mode === "files_only") return buildFilesOnly(module, records);
+  if (mode === "compact") return buildCompact(module, records);
+  return buildFull(module, records);
 }
 
 // === Output builders ===
@@ -159,14 +200,15 @@ function buildCompact(module: string, records: FunctionRecord[]) {
 
     const items: Array<Record<string, unknown>> = [];
 
-    for (const [className, cls] of classItems) {
+    for (const { record, methods } of sortByKind(Array.from(classItems.values()))) {
       const entry: Record<string, unknown> = {
-        name: className,
-        kind: cls.record.kind,
-        signature: flattenSignature(cls.record.signature),
+        name: record.name,
+        kind: record.kind,
+        signature: flattenSignature(record.signature),
       };
-      if (cls.methods.length > 0) {
-        entry.methods = cls.methods.map(m => flattenSignature(m.signature));
+      addTypeRelationships(entry, record);
+      if (methods.length > 0) {
+        entry.methods = methods.map(m => flattenSignature(m.signature));
       }
       items.push(entry);
     }
@@ -193,17 +235,18 @@ function buildFull(module: string, records: FunctionRecord[]) {
 
     const items: Array<Record<string, unknown>> = [];
 
-    for (const [className, cls] of classItems) {
+    for (const { record, methods } of sortByKind(Array.from(classItems.values()))) {
       const classEntry: Record<string, unknown> = {
-        name: className,
-        kind: cls.record.kind,
-        signature: flattenSignature(cls.record.signature),
-        line_start: cls.record.lineStart,
+        name: record.name,
+        kind: record.kind,
+        signature: flattenSignature(record.signature),
+        line_start: record.lineStart,
       };
-      addOptionalDocstring(classEntry, cls.record);
+      addOptionalDocstring(classEntry, record);
+      addTypeRelationships(classEntry, record);
 
-      if (cls.methods.length > 0) {
-        classEntry.methods = cls.methods.map(m => {
+      if (methods.length > 0) {
+        classEntry.methods = methods.map(m => {
           const method: Record<string, unknown> = {
             name: m.name.split(".").pop()!,
             signature: flattenSignature(m.signature),
@@ -282,6 +325,59 @@ function addOptionalDocstring(entry: Record<string, unknown>, record: FunctionRe
   if (record.docstring?.tags && record.docstring.tags.length > 0) entry.tags = record.docstring.tags;
 }
 
+function addTypeRelationships(entry: Record<string, unknown>, record: FunctionRecord): void {
+  if (record.typeRelationships?.implements?.length) entry.implements = record.typeRelationships.implements;
+  if (record.typeRelationships?.extends?.length) entry.extends = record.typeRelationships.extends;
+}
+
 function flattenSignature(sig: string): string {
   return sig.replace(/\s*\n\s*/g, " ").trim();
+}
+
+// === Sub-module grouping ===
+
+function findCommonModuleBase(records: FunctionRecord[]): string {
+  const modules = [...new Set(records.map(r => r.module))];
+  if (modules.length <= 1) return modules[0] ?? "";
+  let base = modules[0];
+  for (let i = 1; i < modules.length; i++) {
+    while (base.length > 0 && modules[i] !== base && !modules[i].startsWith(base + "/")) {
+      const lastSlash = base.lastIndexOf("/");
+      base = lastSlash === -1 ? "" : base.slice(0, lastSlash);
+    }
+  }
+  return base;
+}
+
+function groupBySubmodule(records: FunctionRecord[]): Map<string, FunctionRecord[]> {
+  const base = findCommonModuleBase(records);
+  const map = new Map<string, FunctionRecord[]>();
+  for (const r of records) {
+    let key: string;
+    if (r.module === base || !r.module.startsWith(base + "/")) {
+      key = "(root)";
+    } else {
+      const relative = r.module.slice(base.length + 1);
+      const slash = relative.indexOf("/");
+      key = slash === -1 ? relative : relative.slice(0, slash);
+    }
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return map;
+}
+
+// === Kind-based sorting ===
+
+const KIND_ORDER: Record<string, number> = {
+  interface: 0, class: 2, struct: 3, enum: 4, record: 5, function: 6, method: 7,
+};
+
+function kindSortOrder(r: FunctionRecord): number {
+  if (r.structuralHints?.isAbstract) return 1; // abstract classes between interface and concrete
+  return KIND_ORDER[r.kind] ?? 99;
+}
+
+function sortByKind<T extends { record: FunctionRecord }>(items: T[]): T[] {
+  return [...items].sort((a, b) => kindSortOrder(a.record) - kindSortOrder(b.record));
 }

@@ -18,6 +18,10 @@ export const ModuleSummarySchema = z.object({
   workspace,
   file: z.string().optional().describe("Focus on a single file within the module (e.g., 'checkout.py'). Omit to see the entire module."),
   detail: z.enum(["auto", "full", "compact", "files_only"]).default("auto").describe("Detail level: 'auto' adapts to module size (default), 'full' shows signatures+summary+tags, 'compact' shows signatures only, 'files_only' shows file list with function counts."),
+  group_by: z.enum(["auto", "file", "submodule"]).default("auto").describe(
+    "Grouping strategy: 'auto' uses submodule grouping when module has sub-directories and is large enough (default), " +
+    "'file' groups by source file only (classic behavior), 'submodule' groups by sub-directory within the module."
+  ),
 });
 
 export const FunctionSourceSchema = z.object({

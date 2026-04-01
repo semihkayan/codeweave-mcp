@@ -251,7 +251,7 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
       isAsync: false,
       docstring: getJSDoc(classOuterNode) || undefined,
       decorators: getTsDecorators(classNode),
-      classInfo: { inherits: [...extendsList, ...implementsList], methods: methodNames },
+      classInfo: { inherits: extendsList, implements: implementsList, methods: methodNames },
     });
   }
 

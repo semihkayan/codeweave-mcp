@@ -538,13 +538,14 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       docstring,
       classInfo: raw.classInfo ? {
         ...raw.classInfo,
+        implements: raw.classInfo.implements || [],
         state: docstring?.state ?? [],
         pattern: docstring?.pattern ?? [],
         inherits: docstring?.inherits ?? raw.classInfo.inherits,
       } : undefined,
       // Type relationships from classInfo (implements/extends come from parser)
       typeRelationships: raw.classInfo ? {
-        implements: [], // Filled by TypeGraph from parser's extractTypeRelationships
+        implements: raw.classInfo.implements || [],
         extends: raw.classInfo.inherits || [],
         usesTypes: [],
       } : undefined,
