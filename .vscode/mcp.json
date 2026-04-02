@@ -1,7 +1,10 @@
 {
   "servers": {
     "codeweave": {
-      "command": "codeweave-server"
+      "command": "/opt/homebrew/Cellar/node@22/22.22.2/bin/node",
+      "args": [
+        "/opt/homebrew/lib/node_modules/@codeweave/mcp/dist/index.js"
+      ]
     }
   }
 }
