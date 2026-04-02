@@ -136,13 +136,8 @@ function isDangerousDir(dir: string): boolean {
 
 // === MCP Config Helpers ===
 
-function resolvePackageScript(scriptRelPath: string, binName: string): string | null {
-  // Unix: try which first (returns symlink → JS file, upgrade-safe)
-  if (os.platform() !== "win32") {
-    const cmdPath = resolveCommand(binName);
-    if (cmdPath) return cmdPath;
-  }
-  // Windows always, Unix fallback: resolve via npm global root
+function resolvePackageScript(scriptRelPath: string): string | null {
+  // Always use npm root -g — guaranteed global install path, never npx cache
   const npmRoot = runOrNull("npm root -g");
   if (!npmRoot) return null;
   const scriptPath = path.join(npmRoot, "@codeweave", "mcp", scriptRelPath);
@@ -150,7 +145,7 @@ function resolvePackageScript(scriptRelPath: string, binName: string): string | 
 }
 
 function resolveServerScript(): string | null {
-  return resolvePackageScript("dist/index.js", "codeweave-server");
+  return resolvePackageScript("dist/index.js");
 }
 
 function needsConfigUpdate(entry: any): boolean {
@@ -390,7 +385,7 @@ async function pullEmbeddingModel(): Promise<void> {
 function configureMcpClients(cwd: string, installFailed: boolean): void {
   // Resolve absolute paths so MCP clients don't depend on PATH
   // Prefer symlink paths (survive upgrades), fall back to process.execPath
-  const nodePath = resolveCommand("node") || process.execPath;
+  const nodePath = process.execPath;
   const serverPath = resolveServerScript();
 
   let mcpEntry: Record<string, any> | null = null;
@@ -421,9 +416,9 @@ function indexProject(cwd: string, forceReindex: boolean): void {
     return;
   }
 
-  const initScript = resolvePackageScript("dist/scripts/init.js", "codeweave-init");
+  const initScript = resolvePackageScript("dist/scripts/init.js");
   if (initScript) {
-    const nodePath = resolveCommand("node") || process.execPath;
+    const nodePath = process.execPath;
     try {
       execFileSync(nodePath, [initScript, ...(forceReindex ? ["--force"] : [])], { stdio: "inherit", cwd });
       ok("Project indexed");
