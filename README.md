@@ -163,6 +163,11 @@ Every language parser also provides:
 CodeWeave works zero-config out of the box. For customization, create `.code-context/config.yaml`:
 
 ```yaml
+workspaces:
+  - .                                  # Root workspace
+  - clients/web                        # Web client
+  - clients/mobile                     # Mobile client
+
 embedding:
   model: "qwen3-embedding:0.6b"     # Embedding model name
   ollamaUrl: "http://localhost:11434" # Ollama API endpoint
@@ -224,9 +229,8 @@ ollama pull qwen3-embedding:0.6b
 # 3. Index your project
 cd your-project
 codeweave-init
-
-# 4. Configure your MCP client
 ```
+### 4. Configure your MCP client
 
 **Claude Code** — add `.mcp.json` to your project root:
 
