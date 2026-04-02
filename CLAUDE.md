@@ -2,6 +2,8 @@
 
 This file contains only what an agent cannot easily derive from code: architectural decisions and their reasons, non-obvious conventions, and cross-cutting rules. **Before changing anything, ask: "Can the agent figure this out easily by reading the code?" If yes, don't add it.**
 
+If you discover something non-obvious that a future agent couldn't derive from code alone, propose a CLAUDE.md update to the user.
+
 ## What this project is
 
 MCP server that gives AI agents cheap, precise code understanding. Instead of dumping entire files into context, the agent queries local indexes (AST, call graph, type graph, vector search) and gets back only what it needs. All indexing is local and live — file watcher keeps everything current as code changes.
@@ -118,3 +120,4 @@ export async function handleToolName(args: { ... }, ctx: AppContext) {
 - **LanceDB vectors** — `Float32Array` must be converted to regular arrays before storage.
 - **Embedding failures** — failed batches are skipped (not zero-filled). Unembedded functions get retried on next reindex.
 - **LanceDB query API** — use `table.query().where(filter)` not `table.filter(filter)` (removed in newer versions). Always try/catch.
+- **Setup path resolution** — never use `which`/`resolveCommand` to find package scripts (`codeweave-server`, `codeweave-init`). When setup runs via `npx`, `which` returns npx's temp cache path (`~/.npm/_npx/<hash>/...`) which breaks after cache cleanup. Use `process.execPath` for node and `npm root -g` for package scripts.
