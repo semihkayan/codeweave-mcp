@@ -143,7 +143,8 @@ export class TestHarness {
       } catch (err) {
         results.push({
           label, tool: c.tool, status: "fail", elapsedMs: 0, tokens: 0, data: null,
-          error: err instanceof Error ? err.message : String(err), detail: "exception",
+          error: err instanceof Error ? err.message : String(err),
+          detail: classifyError(err),
         });
       }
     }
@@ -279,12 +280,25 @@ export class TestHarness {
 
     const secondWorkspace = workspaces.length > 1 ? workspaces[1] : undefined;
 
+    const gaps: string[] = [];
+    if (!module) gaps.push("module");
+    if (!functionName) gaps.push("functionName");
+    if (!functionWithBody) gaps.push("functionWithBody");
+    if (!functionWithDeps) gaps.push("functionWithDeps");
+    if (!functionWithCallers) gaps.push("functionWithCallers");
+    if (!interfaceRecord) gaps.push("interfaceRecord");
+
+    if (gaps.length > 0) {
+      console.log(`  Discovery gaps (tests will be skipped): ${gaps.join(", ")}`);
+    }
+
     this._discovery = {
       workspaces, workspace: wsPath, secondWorkspace,
       module, functionName, functionModule, filePath,
       functionWithBody, functionWithBodyModule,
       functionWithDeps, functionWithCallers, interfaceRecord,
       isMulti: this.ctx.isMultiWorkspace,
+      gaps,
     };
     return this._discovery;
   }
@@ -306,9 +320,18 @@ interface DiscoveryState {
   functionWithCallers?: string;
   interfaceRecord?: string;
   isMulti: boolean;
+  gaps: string[];
 }
 
 // === Helpers ===
+
+function classifyError(err: unknown): string {
+  if (err instanceof SyntaxError) return "parse_error";
+  if (err instanceof TypeError) return "type_error";
+  if (err instanceof RangeError) return "range_error";
+  if (err != null && typeof err === "object" && "issues" in err) return "validation_error";
+  return "runtime_error";
+}
 
 /** Build args with optional module hint and workspace */
 function fnArgs(ds: DiscoveryState, name: string, moduleHint?: string, extra?: Record<string, unknown>): Record<string, unknown> {

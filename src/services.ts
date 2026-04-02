@@ -22,7 +22,6 @@ import { ReindexOrchestrator } from "./core/reindex-orchestrator.js";
 import { detectWorkspaces } from "./core/workspace-detector.js";
 import { loadConfig } from "./utils/config.js";
 import { normalizeModuleQuery } from "./utils/file-utils.js";
-import { GitService } from "./utils/git-utils.js";
 import { logger } from "./utils/logger.js";
 
 export async function createServices(projectRoot?: string): Promise<AppContext> {
@@ -132,7 +131,6 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     conventions,
     noiseFilter,
     watcher,
-    git: new GitService(),
     reindex: reindexOrchestrator,
     ready: false,
     async shutdown() {

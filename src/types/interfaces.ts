@@ -173,14 +173,6 @@ export interface IDocstringParser {
   parse(raw: string, kind: "function" | "method" | "class"): ParsedDocstring;
 }
 
-// === Git Service ===
-
-export interface IGitService {
-  getChangedFiles(projectRoot: string, since?: string): Promise<Array<{ filePath: string; changeType: "added" | "modified" | "deleted" | "renamed" }>>;
-  getRecentCommits(projectRoot: string, since?: string): Promise<Array<{ hash: string; message: string; date: string; author: string; files: string[] }>>;
-  isGitRepo(projectRoot: string): Promise<boolean>;
-}
-
 // === Persistence ===
 
 export interface IRecordStore {
@@ -282,7 +274,6 @@ export interface AppContext {
   readonly conventions: LanguageConventions;
   readonly noiseFilter: NoiseFilterMetadata;
   readonly watcher: IFileWatcher;
-  readonly git: IGitService;
   readonly reindex: IReindexOrchestrator;
   normalizeModuleQuery(query: string): string[];
   ready: boolean;
