@@ -9,30 +9,18 @@ const OLLAMA_MODEL = "qwen3-embedding:0.6b";
 
 const CLAUDE_MD_SNIPPET = `## CRITICAL: This project uses CodeWeave MCP
 
-Always prefer codeweave tools over generic alternatives — they are faster, cheaper, and more accurate:
-- Exploring a module → \`get_module_summary\` (not find/ls/Glob)
-- Reading one function → \`get_function_source\` (not Read/cat)
-- Searching by concept → \`semantic_search\` (not grep/rg)
-- Tracing calls → \`get_dependencies\` (not grep)
-- Change risk → \`get_impact_analysis\` (not grep for callers)
+Always prefer codeweave tools over generic alternatives — they are faster, cheaper, and more accurate.
 
 When you add or modify a function, you MUST add a docstring. Start with a one-line summary, then add annotations:
 - \`@deps: functionA, ClassB.method\` — functions it calls (always include)
 - \`@tags: auth, payments, api\` — domain/concern labels (always include)
 - \`@side_effects: database_write, external_api_call\` — if the function has observable effects
 
-Example:
-\`\`\`
-Validate order fields and check inventory.
-@deps: validateFields, InventoryService.check
-@tags: orders, validation
-\`\`\`
-
 These annotations power semantic search, call graph validation, and impact analysis — without them, codeweave tools degrade significantly.
 
-When writing code, if you notice a docstring that is incorrect, misleading, outdated, or missing — fix it, even if it's not part of your current task. This keeps the index accurate over time.
+When writing code, if you notice a docstring that is incorrect, misleading, or missing — fix it, even if it's not part of your current task. This keeps the index accurate over time.
 
-After writing code, run \`get_stale_docstrings\` to find and fix missing or outdated annotations. If coverage is low, prioritize functions you touch — don't try to backfill the entire codebase at once.
+After writing code, run \`get_stale_docstrings\` to find and fix missing annotations. If coverage is low, prioritize functions you touch — don't try to backfill the entire codebase at once.
 `;
 const DEBUG = process.argv.includes("--debug");
 const AUTO_YES = process.argv.includes("--yes") || process.argv.includes("-y") || !process.stdin.isTTY;
