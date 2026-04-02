@@ -549,7 +549,13 @@ async function main() {
   printSummary(installFailed);
 }
 
-main().catch(err => {
-  fail(`Setup failed: ${err.message || err}`);
-  process.exit(1);
-});
+// MCP clients connect via stdio pipe — stdin is never a TTY.
+// Route to the actual MCP server instead of running the setup wizard.
+if (!process.stdin.isTTY) {
+  import("../index.js");
+} else {
+  main().catch(err => {
+    fail(`Setup failed: ${err.message || err}`);
+    process.exit(1);
+  });
+}

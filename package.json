@@ -1,6 +1,6 @@
 {
   "name": "@codeweave/mcp",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "mcpName": "io.github.semihkayan/codeweave",
   "description": "Codebase graph analysis for AI agents — AST + call graph + type graph + hybrid semantic search via MCP",
   "type": "module",
@@ -73,8 +73,8 @@
     "tree-sitter-c-sharp": "^0.23.1",
     "glob": "^13.0.0",
     "ignore": "^6.0.0",
-    "yaml": "^2.6.0",
-    "simple-git": "^3.25.0",
+    "yaml": "^2.8.3",
+    "simple-git": "^3.32.3",
     "chokidar": "^4.0.0",
     "zod": "^3.23.0",
     "pino": "^9.0.0"
