@@ -6,3 +6,4 @@ dist/
 .claude/worktrees/
 feedback.md
 .claude/plans/
+.mcpregistry_*
