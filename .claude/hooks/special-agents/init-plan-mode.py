@@ -7,10 +7,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _lib import delete_state, session_state_path, validate_session_id
 
 PLAN_RULES = (
-    "## Plan Rules\n\n"
-    "- Don't assume — verify or ask\n"
+    "## Important Plan Rules\n\n"
     "- The plan file must be in English\n"
-    "- Compare alternatives. Confirm the chosen approach is the strongest.\n"
+    "- Don't assume — verify or ask\n"
     "- Seek simplicity, SOLID, minimal failure surface, idempotent & resume-safe steps and performance. Flag over-engineering and unjustified abstractions.\n"
     "- **Shared library** — for context-free code another caller could plausibly need:\n"
     "  1. Fits existing → use it.\n"

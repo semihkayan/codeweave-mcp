@@ -29,7 +29,7 @@ ROUTING_BODIES = {
         '  prompt: "Implement the plan at this path: {plan_path}\\n\\n"\n'
         ')\n\n'
         "If it returns with a blocker, take initiative to resolve it; resume the implementer via SendMessage using its agentId; inform it of the resolution.\n\n"
-        "After implementer returns, review the implementation critically: what would you have done differently?\n"
+        "After implementer returns, assume the implementation has problems; find them all ignoring whether it followed the plan.\n"
         "If you have any findings, don't ask for permission; resume the implementer via SendMessage using its agentId; pass concise fix instructions.\n"
         "After implementation, report final state with max 200 words.\n\n"
         "Exception: If the implementation is less than 15 lines of code, do it yourself."
