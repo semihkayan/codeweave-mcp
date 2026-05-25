@@ -40,6 +40,9 @@ export async function handleIndexStatus(
       workspace: wsPath,
       status: stats.files > 0 ? "healthy" : "empty",
       ast_index: stats,
+      vector_store: { rows: await ws.vectorDb.countRows(), model: ctx.config.embedding.model },
+      call_graph: ws.callGraph.getStats(),
+      type_graph: ws.typeGraph.getStats(),
       docstring_coverage: ws.index.getDocstringCoverage(),
       languages: ws.index.getLanguageStats(),
     });

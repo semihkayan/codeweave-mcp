@@ -148,7 +148,7 @@ const NON_ACCESSOR_KINDS = new Set(["class", "interface", "enum", "struct", "rec
  * Optional isCallNoise predicate filters defensive wrappers (Objects.requireNonNull,
  * Optional.ofNullable, unwrap, etc.) so they don't disqualify accessors.
  */
-export function isAccessor(
+function isAccessor(
   record: FunctionRecord,
   callEntry: CallGraphEntry | undefined,
   constructorNames?: ReadonlySet<string>,

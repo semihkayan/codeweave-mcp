@@ -25,13 +25,13 @@ Single-process Node.js MCP server. stdout is reserved for MCP protocol — never
 ### Layers
 
 ```
-index.ts             → MCP shell: registerTool × 8, transport, shutdown
+index.ts             → MCP shell: registerTool × 3, transport, shutdown
 services.ts          → Composition root: ALL concrete instantiation here
-tools/               → 8 tool handlers (thin orchestrators, interface-only deps)
+tools/               → 3 tool handlers (thin orchestrators, interface-only deps)
 core/                → Business logic behind interfaces
 parsers/             → 7 language parsers (tree-sitter wrappers)
 utils/               → Config, file I/O, git, logging, SQL escape
-scripts/             → CLI tools (init, reindex, setup, check-docstrings)
+scripts/             → CLI tools (init, reindex, setup)
 types/index.ts       → Data types (FunctionRecord, VectorRow, CallGraphEntry, etc.)
 types/interfaces.ts  → All interfaces
 ```
@@ -108,7 +108,7 @@ export async function handleToolName(args: { ... }, ctx: AppContext) {
 
 ## Testing
 
-`TestHarness` (`src/test-harness.ts`) — test MCP tools against any project. Three modes: `testAll()` runs 45 built-in generic tests, `run([...])` executes agent-defined cases in bulk, `call()` for single manual calls. `close()` releases memory (clear all index/graph maps).
+`TestHarness` (`src/test-harness.ts`) — test MCP tools against any project. Three modes: `testAll()` runs built-in generic tests, `run([...])` executes agent-defined cases in bulk, `call()` for single manual calls. `close()` releases memory (clear all index/graph maps).
 
 `initializeWorkspaces()` in `services.ts` — shared init logic between MCP server and test harness. Returns `WorkspaceEmbedPlan` per workspace; MCP server passes this to `backgroundEmbed()`, test harness ignores it.
 
@@ -131,8 +131,6 @@ When you add or modify a function, you MUST add a docstring. Start with a one-li
 - `@tags: auth, payments, api` — domain/concern labels (always include)
 - `@side_effects: database_write, external_api_call` — if the function has observable effects
 
-These annotations power semantic search, call graph validation, and impact analysis — without them, codeweave tools degrade significantly.
+These annotations power semantic search — without them, retrieval quality degrades significantly.
 
 When writing code, if you notice a docstring that is incorrect, misleading, or missing — fix it, even if it's not part of your current task. This keeps the index accurate over time.
-
-After writing code, run `get_stale_docstrings` to find and fix missing annotations. If coverage is low, prioritize functions you touch — don't try to backfill the entire codebase at once.

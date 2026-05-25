@@ -38,12 +38,6 @@ const ConfigSchema = z.object({
     ]),
     sourceRoot: z.string().optional(),
   }).default({}),
-  moduleSummary: z.object({
-    compactThreshold: z.number().default(20),
-    filesOnlyThreshold: z.number().default(50),
-    overviewThreshold: z.number().default(200),
-    maxTokenBudget: z.number().default(50000),
-  }).default({}),
   search: z.object({
     highConfidenceThreshold: z.number().min(0).max(1).default(0.6),
     rrfK: z.number().default(60),

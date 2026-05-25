@@ -5,7 +5,6 @@ import { execSync } from "node:child_process";
 import type { AppContext, WorkspaceServices } from "./types/interfaces.js";
 import { reembedFunctions } from "./core/reembed.js";
 import { FunctionIndex } from "./core/function-index.js";
-import { SourceExtractor } from "./core/source-extractor.js";
 import { JsonFileRecordStore } from "./core/record-store-json.js";
 import { HashBasedStalenessChecker } from "./core/staleness-hash.js";
 import { DocstringParser } from "./core/docstring-parser.js";
@@ -79,7 +78,6 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     const recordStore = new JsonFileRecordStore(cacheDir);
     const staleness = new HashBasedStalenessChecker(config);
     const functionIndex = new FunctionIndex(parsers, recordStore, staleness, docstringParser, config, wsRoot, testMetadata, conventions);
-    const sourceExtractor = new SourceExtractor(functionIndex, wsRoot);
 
     // Vector DB + Search pipeline — real implementation
     const lanceStore = new LanceDBStore();
@@ -93,7 +91,6 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
     workspaces.set(wsPath, {
       index: functionIndex,
       indexWriter: functionIndex,
-      source: sourceExtractor,
       search: searchPipeline,
       callGraph: callGraphManager,
       callGraphWriter: callGraphManager,

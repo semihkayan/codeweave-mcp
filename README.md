@@ -43,33 +43,11 @@ Open your project in Claude Code or VS Code and start asking questions.
 
 ## Tools
 
-8 tools organized around the code understanding workflow:
-
-### Discover
+3 tools organized around the code understanding workflow:
 
 | Tool | Purpose |
 |------|---------|
 | `semantic_search` | Search by meaning — finds functions even when you don't know exact names. Hybrid vector + keyword search with density-based reranking. |
-| `get_module_summary` | Browse a directory's functions and classes with signatures. Auto-adapts detail level to module size. |
-
-### Read
-
-| Tool | Purpose |
-|------|---------|
-| `get_function_source` | Get a specific function's source code — no need to read entire files. Supports class context and surrounding lines. |
-
-### Analyze
-
-| Tool | Purpose |
-|------|---------|
-| `get_dependencies` | What does this function call? Cross-validates AST with docstring `@deps`. Categorizes: confirmed, AST-only, docstring-only, unresolved. |
-| `get_impact_analysis` | Blast radius of a change. Combines call graph + type graph. Risk levels: high (direct callers), medium (indirect), low (transitive). |
-| `get_stale_docstrings` | Find missing or outdated docstrings. Detects `@deps` drift, missing `@tags`, and undocumented functions. |
-
-### Maintain
-
-| Tool | Purpose |
-|------|---------|
 | `reindex` | Manually trigger index update. Usually unnecessary — file watcher auto-reindexes on changes. |
 | `get_index_status` | Index health dashboard: file/function counts, embedding status, call graph stats, language breakdown. |
 
@@ -88,15 +66,15 @@ tree-sitter AST  ───>  Function Index (in-memory)
                    │          │          │
                    └──────────┼──────────┘
                               ▼
-                       8 MCP Tools  ───>  AI Agent
+                       3 MCP Tools  ───>  AI Agent
 ```
 
 1. **Parse** — tree-sitter extracts every function, class, method, and interface across 7 languages
 2. **Embed** — Qwen3-Embedding-0.6B generates vector embeddings for semantic search
 3. **Index** — LanceDB stores vectors with BM25 full-text index alongside
-4. **Graph** — Call graph tracks who-calls-whom with type-aware resolution; type graph tracks inheritance and implementations
+4. **Graph** — Call graph tracks who-calls-whom with type-aware resolution; type graph tracks inheritance and implementations (powers ranking and index-status reporting)
 5. **Watch** — File watcher detects changes and incrementally reindexes affected files
-6. **Serve** — 8 tools exposed over MCP protocol (stdio), ready before indexing completes
+6. **Serve** — 3 tools exposed over MCP protocol (stdio), ready before indexing completes
 
 ## Semantic Search
 
@@ -128,7 +106,7 @@ The search pipeline is where CodeWeave really shines. It's not just vector simil
 - **Constructors** — many params inflate scores, but they're just assignments
 - **Test files** — large bodies don't mean important behavior (unless you're searching for tests)
 
-**Graceful degradation:** If Ollama is unavailable, search falls back to full-text only. AST-based tools (dependencies, impact analysis, module summary) work without any embedding infrastructure.
+**Graceful degradation:** If Ollama is unavailable, search falls back to full-text only.
 
 ## Why These Technologies
 
@@ -205,9 +183,6 @@ codeweave-init [path] [--force] [--no-embed]
 
 # Incremental reindex (only changed files)
 codeweave-reindex [--all] [--files=path1,path2] [--stdin]
-
-# Docstring coverage report
-codeweave-check-docstrings [--strict] [files...]
 ```
 
 ## Manual Setup
@@ -280,11 +255,11 @@ CodeWeave automatically detects git worktrees (including Claude Code's `/worktre
 ## Requirements
 
 - **Node.js 20+**
-- **Ollama** — for semantic search embeddings. Install via the setup wizard or manually from [ollama.com](https://ollama.com). AST-based tools work without Ollama.
+- **Ollama** — for semantic search embeddings. Install via the setup wizard or manually from [ollama.com](https://ollama.com). Without Ollama, semantic search falls back to full-text only.
 
 ## Status
 
-CodeWeave is under **active development**. The core indexing pipeline and all 8 tools are stable and tested across production codebases in all 7 supported languages.
+CodeWeave is under **active development**. The core indexing pipeline and all 3 tools are stable and tested across production codebases in all 7 supported languages.
 
 Feedback, bug reports, and contributions are welcome — open an issue at [github.com/semihkayan/codeweave-mcp](https://github.com/semihkayan/codeweave-mcp/issues).
 

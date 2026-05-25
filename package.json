@@ -2,7 +2,7 @@
   "name": "@codeweave/mcp",
   "version": "0.1.20",
   "mcpName": "io.github.semihkayan/codeweave",
-  "description": "Codebase graph analysis for AI agents — AST + call graph + type graph + hybrid semantic search via MCP",
+  "description": "Hybrid semantic code search for AI agents via MCP — AST + call/type graph backed reranking",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -15,7 +15,6 @@
     "codeweave-server": "dist/index.js",
     "codeweave-init": "dist/scripts/init.js",
     "codeweave-reindex": "dist/scripts/reindex.js",
-    "codeweave-check-docstrings": "dist/scripts/check-docstrings.js",
     "codeweave-setup": "dist/scripts/setup.js"
   },
   "files": [

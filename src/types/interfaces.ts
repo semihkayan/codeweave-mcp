@@ -10,19 +10,13 @@ export interface IFunctionIndexReader {
   getById(id: string): FunctionRecord | null;
   getByModule(module: string): FunctionRecord[];
   getByFile(filePath: string): FunctionRecord[];
-  getByTags(tags: string[], matchMode: "all" | "any"): FunctionRecord[];
   findByName(name: string, module?: string): FunctionRecord[];
-  findByExactName(name: string): FunctionRecord[];
-  findByClassAware(query: string): FunctionRecord[];
-  getAllModules(): string[];
-  getAllNames(): string[];
   getAllFilePaths(): string[];
   getFileRecordIds(filePath: string): string[];
   getFileHashes(): Map<string, string>;
   getStats(): { files: number; functions: number; classes: number };
   getDocstringCoverage(): number;
   getLanguageStats(): Record<string, number>;
-  getAll(): FunctionRecord[];
 }
 
 // === Index: Write ===
@@ -34,18 +28,6 @@ export interface IFunctionIndexWriter {
   loadFromDisk(): Promise<void>;
   saveToDisk(): Promise<void>;
   clear(): void;
-}
-
-// === Source Extraction ===
-
-export interface ISourceExtractor {
-  getFunctionSource(id: string, contextLines?: number): Promise<{
-    source: string;
-    lineStart: number;
-    lineEnd: number;
-    contextBefore?: string;
-    contextAfter?: string;
-  }>;
 }
 
 // === Embedding ===
@@ -251,7 +233,6 @@ export interface LanguageConventions {
 export interface WorkspaceServices {
   readonly index: IFunctionIndexReader;
   readonly indexWriter: IFunctionIndexWriter;
-  readonly source: ISourceExtractor;
   readonly search: ISearchPipeline;
   readonly callGraph: ICallGraphReader;
   readonly callGraphWriter: ICallGraphWriter;
@@ -296,12 +277,6 @@ export interface Config {
     languages: Record<string, string[]>;
     ignore: string[];
     sourceRoot?: string;
-  };
-  moduleSummary: {
-    compactThreshold: number;
-    filesOnlyThreshold: number;
-    overviewThreshold: number;
-    maxTokenBudget: number;
   };
   search: {
     highConfidenceThreshold: number;
