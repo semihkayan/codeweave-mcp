@@ -9,7 +9,7 @@ Replace <path-to-plan-file> with the actual path to the plan file. Do not pass t
 Agent(
     subagent_type: "plan-implementation-reviewer",
     model: "opus",
-    description: "Plan Implementation Review",
+    description: "Review The Implementation",
     prompt: "Review the implementation of this plan: <path-to-plan-file>"
 )
 
@@ -19,7 +19,7 @@ The reviewer will return a list of findings and its agentId. Analyze the report.
 ## 3. Resume The Reviewer
 Do not ask to the user. Do not fix yourself. Resume the reviewer via SendMessage tool with agentId. Give it the ones you want it to address and additional context if needed.
 
-Exception: If the fix is less than 15 lines, fix yourself.
+Exception: If the total fix work is less than 15 lines, fix yourself.
 
 ## 4. Review The Fixes
 Review the fixes proposed by the reviewer. If plan verification steps exist, repeat them.
