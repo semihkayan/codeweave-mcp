@@ -7,3 +7,5 @@ dist/
 feedback.md
 .claude/plans/
 .mcpregistry_*
+__pycache__/
+.claude/hooks/*/state/
