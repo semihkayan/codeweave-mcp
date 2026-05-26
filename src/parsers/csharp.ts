@@ -168,9 +168,8 @@ function extractFunctions(rootNode: SyntaxNode, _filePath: string): RawFunctionI
     // C# convention: interfaces start with I followed by uppercase
     const impl = allBases.filter(b => b.startsWith("I") && b[1] === b[1]?.toUpperCase());
     const inherits = allBases.filter(b => !impl.includes(b));
-    // FunctionRecord.kind only supports "function" | "method" | "class"
-    // But we use "class" for all type declarations — the actual type distinction
-    // is captured in TypeGraphManager via extractTypeRelationships
+    // FunctionRecord.kind uses "class" for all type declarations (class/struct/interface/record/enum).
+    // The actual type distinction is captured in TypeGraphManager via extractTypeRelationships.
     const kind = "class" as const;
     const methods = walkNodes(node, ["method_declaration"])
       .map((m: SyntaxNode) => m.childForFieldName("name")?.text).filter(Boolean) as string[];
@@ -215,7 +214,7 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
     if (ns.length > 0) {
       const fullPath = ns[0].text;
       const name = fullPath.split(".").pop() || fullPath;
-      results.push({ importedName: name, modulePath: fullPath, isDefault: false });
+      results.push({ importedName: name, modulePath: fullPath });
     }
   }
   return results;
@@ -236,7 +235,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
                  node.type === "record_declaration" ? "record" as const : "class" as const;
 
     const members: Array<{ name: string; type: string }> = [];
-    const usesTypesSet = new Set<string>();
     const body = node.childForFieldName("body");
 
     if (kind !== "interface" && body) {
@@ -254,44 +252,12 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
             const fieldName = decl.childForFieldName("name")?.text;
             if (fieldName) members.push({ name: fieldName, type: typeName });
           }
-          for (const tid of walkNodes(typeNode, ["identifier"])) {
-            if (!CSHARP_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-          }
         } else if (child.type === "property_declaration") {
           if (child.children.some((c: SyntaxNode) => c.text === "static")) continue;
           const typeNode = child.childForFieldName("type");
           const nameNode = child.childForFieldName("name");
           if (typeNode && nameNode) {
             members.push({ name: nameNode.text, type: extractPrimaryTypeName(typeNode) });
-            for (const tid of walkNodes(typeNode, ["identifier"])) {
-              if (!CSHARP_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-            }
-          }
-        }
-      }
-
-      // Collect types from method/constructor signatures for usesTypes
-      for (let i = 0; i < body.childCount; i++) {
-        const child = body.children[i];
-        if (child.type !== "method_declaration" && child.type !== "constructor_declaration") continue;
-        const retType = getMethodReturnType(child);
-        if (retType) {
-          for (const tid of walkNodes(retType, ["identifier"])) {
-            if (!CSHARP_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-          }
-        }
-        // Walk only parameter TYPE nodes, not parameter names
-        const params = child.childForFieldName("parameters");
-        if (params) {
-          for (let j = 0; j < params.childCount; j++) {
-            const p = params.children[j];
-            if (p.type !== "parameter") continue;
-            const pt = p.childForFieldName("type");
-            if (pt) {
-              for (const tid of walkNodes(pt, ["identifier"])) {
-                if (!CSHARP_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-              }
-            }
           }
         }
       }
@@ -326,9 +292,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
           const nameNode = param.childForFieldName("name");
           if (typeNode && nameNode) {
             members.push({ name: nameNode.text, type: extractPrimaryTypeName(typeNode) });
-            for (const tid of walkNodes(typeNode, ["identifier"])) {
-              if (!CSHARP_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-            }
           }
         }
       }
@@ -336,7 +299,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
 
     results.push({
       className: name, kind, implements: impl, extends: ext,
-      usesTypes: Array.from(usesTypesSet),
       members: members.length > 0 ? members : undefined,
       filePath, lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
     });

@@ -8,9 +8,8 @@ import type {
   TestDetectionMetadata, LanguageConventions,
 } from "../types/interfaces.js";
 import type { FunctionRecord } from "../types/index.js";
-import { readFile, computeModule, detectLanguage, normalizeModuleQuery } from "../utils/file-utils.js";
+import { readFile, computeModule, detectLanguage } from "../utils/file-utils.js";
 import { globSourceFiles } from "../utils/file-utils.js";
-import { decomposeIdentifier } from "../utils/string-similarity.js";
 
 /**
  * Detect whether a file contains test code using structural signals from parser metadata:
@@ -45,7 +44,6 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
   private records = new Map<string, FunctionRecord>();
   private fileIndex = new Map<string, string[]>();      // filePath → [record ids]
   private moduleIndex = new Map<string, string[]>();    // module → [record ids]
-  private tagIndex = new Map<string, Set<string>>();    // tag → Set<record ids>
   private nameIndex = new Map<string, string[]>();      // name → [record ids] (for fast lookup)
   private fileHashes = new Map<string, string>();       // filePath → SHA-256
   private fileMtimes = new Map<string, number>();       // filePath → mtimeMs
@@ -67,192 +65,22 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     return this.records.get(id) ?? null;
   }
 
-  getByModule(module: string): FunctionRecord[] {
-    let results = this.getByModuleExact(module);
-
-    // Fallback: if sourceRoot is configured and query doesn't include it, retry with prefix
-    // Handles agent querying "core" when records are stored as "src/core"
-    if (results.length === 0 && this.config.parser.sourceRoot) {
-      const withPrefix = `${this.config.parser.sourceRoot}/${module}`;
-      results = this.getByModuleExact(withPrefix);
-    }
-
-    // Reverse fallback: agent queries "src/core" but records stored as "core"
-    if (results.length === 0 && this.config.parser.sourceRoot) {
-      const prefix = this.config.parser.sourceRoot + "/";
-      if (module.startsWith(prefix)) {
-        results = this.getByModuleExact(module.slice(prefix.length));
-      }
-    }
-
-    // Suffix fallback: agent queries "user" → matches "com/xxx/user" and sub-modules.
-    if (results.length === 0) {
-      const suffix = `/${module}`;
-      for (const [mod, ids] of this.moduleIndex) {
-        if (mod.endsWith(suffix) || mod.includes(`${suffix}/`)) {
-          for (const id of ids) {
-            const rec = this.records.get(id);
-            if (rec) results.push(rec);
-          }
-        }
-      }
-    }
-
-    // Language source root normalization: strip language-specific prefixes (e.g., "src/main/java/")
-    // and convert dot notation (e.g., "com.wordbox.list" → "com/wordbox/list")
-    if (results.length === 0) {
-      const candidates = normalizeModuleQuery(module, this.config.parser.sourceRoot, this.conventions.sourceRoots);
-      for (const candidate of candidates) {
-        if (candidate === module) continue; // already tried in level 1
-        results = this.getByModuleExact(candidate);
-        if (results.length > 0) break;
-      }
-    }
-
-    return results;
-  }
-
-  private getByModuleExact(module: string): FunctionRecord[] {
-    const results: FunctionRecord[] = [];
-    for (const [mod, ids] of this.moduleIndex) {
-      if (mod === module || mod.startsWith(`${module}/`)) {
-        for (const id of ids) {
-          const rec = this.records.get(id);
-          if (rec) results.push(rec);
-        }
-      }
-    }
-    return results;
-  }
-
   getByFile(filePath: string): FunctionRecord[] {
     return (this.fileIndex.get(filePath) || [])
       .map(id => this.records.get(id)!)
       .filter(Boolean);
   }
 
-  getByTags(tags: string[], matchMode: "all" | "any"): FunctionRecord[] {
-    if (tags.length === 0) return [];
-
-    const tagSets = tags.map(t => this.tagIndex.get(t.toLowerCase()) || new Set<string>());
-
-    let matchingIds: Set<string>;
-    if (matchMode === "all") {
-      matchingIds = new Set(tagSets[0]);
-      for (let i = 1; i < tagSets.length; i++) {
-        for (const id of matchingIds) {
-          if (!tagSets[i].has(id)) matchingIds.delete(id);
-        }
-      }
-    } else {
-      matchingIds = new Set<string>();
-      for (const s of tagSets) {
-        for (const id of s) matchingIds.add(id);
-      }
-    }
-
-    return Array.from(matchingIds)
-      .map(id => this.records.get(id)!)
-      .filter(Boolean);
-  }
-
-  findByName(name: string, module?: string): FunctionRecord[] {
-    // Fast path: exact name match via nameIndex
+  findByName(name: string): FunctionRecord[] {
+    // Exact name match + "ClassName.methodName" pattern
     const directIds = this.nameIndex.get(name) || [];
-    // Also check "ClassName.methodName" pattern
     const dotSuffix = `.${name}`;
     const suffixIds: string[] = [];
     for (const [n, ids] of this.nameIndex) {
       if (n.endsWith(dotSuffix)) suffixIds.push(...ids);
     }
     const allIds = [...new Set([...directIds, ...suffixIds])];
-    const allRecords = allIds.map(id => this.records.get(id)!).filter(Boolean);
-
-    if (!module) return allRecords;
-
-    // Try exact module match first
-    const exact = allRecords.filter(rec => rec.module === module || rec.module.startsWith(`${module}/`));
-    if (exact.length > 0) return exact;
-
-    // Normalize module query and retry with each candidate
-    const candidates = normalizeModuleQuery(module, this.config.parser.sourceRoot, this.conventions.sourceRoots);
-    for (const candidate of candidates) {
-      if (candidate === module) continue; // already tried above
-      const filtered = allRecords.filter(rec => rec.module === candidate || rec.module.startsWith(`${candidate}/`));
-      if (filtered.length > 0) return filtered;
-    }
-
-    return [];
-  }
-
-  findByExactName(name: string): FunctionRecord[] {
-    return (this.nameIndex.get(name) || [])
-      .map(id => this.records.get(id)!)
-      .filter(Boolean);
-  }
-
-  findByClassAware(query: string): FunctionRecord[] {
-    const segments = decomposeIdentifier(query);
-    if (segments.length < 2) return [];
-
-    const verb = segments[0].toLowerCase();
-    const context = segments.slice(1).filter(s => s.length > 2).map(s => s.toLowerCase());
-    if (context.length === 0) return [];
-
-    // Score each class/interface record by context + verb match
-    const candidates: Array<{ record: FunctionRecord; score: number }> = [];
-    for (const rec of this.records.values()) {
-      if (rec.kind !== "class" && rec.kind !== "interface") continue;
-
-      const nameLower = rec.name.toLowerCase();
-      if (!context.every(seg => nameLower.includes(seg))) continue;
-
-      let score = context.length;
-      if (nameLower.includes(verb)) score += 2;
-      if (rec.structuralHints?.isTest) score -= 3;
-
-      candidates.push({ record: rec, score });
-    }
-
-    if (candidates.length === 0) return [];
-    candidates.sort((a, b) => b.score - a.score);
-
-    // For top-scoring class(es), find methods matching verb
-    const topScore = candidates[0].score;
-    const seen = new Set<string>();
-    const results: FunctionRecord[] = [];
-
-    for (const { record: classRec, score } of candidates) {
-      if (score < topScore - 1) break;
-      for (const methodName of classRec.classInfo?.methods || []) {
-        if (this.conventions.constructorNames.has(methodName)) continue;
-        const mLower = methodName.toLowerCase();
-        if (mLower === verb || verb.startsWith(mLower) || mLower.startsWith(verb)) {
-          const fullName = `${classRec.name}.${methodName}`;
-          if (seen.has(fullName)) continue;
-          seen.add(fullName);
-          results.push(...this.findByExactName(fullName));
-        }
-      }
-    }
-
-    return results;
-  }
-
-  getAllNames(): string[] {
-    return Array.from(this.nameIndex.keys());
-  }
-
-  getAllModules(): string[] {
-    const raw = Array.from(this.moduleIndex.keys());
-    // Strip sourceRoot prefix for cleaner display (agent sees "core" not "src/core")
-    const prefix = this.config.parser.sourceRoot ? this.config.parser.sourceRoot + "/" : null;
-    if (!prefix) return raw;
-    return raw.map(m => m.startsWith(prefix) ? m.slice(prefix.length) : m);
-  }
-
-  getAll(): FunctionRecord[] {
-    return Array.from(this.records.values());
+    return allIds.map(id => this.records.get(id)!).filter(Boolean);
   }
 
   getAllFilePaths(): string[] {
@@ -456,15 +284,6 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     if (!this.moduleIndex.has(record.module)) this.moduleIndex.set(record.module, []);
     this.moduleIndex.get(record.module)!.push(record.id);
 
-    // Tag index
-    if (record.docstring?.tags) {
-      for (const tag of record.docstring.tags) {
-        const key = tag.toLowerCase();
-        if (!this.tagIndex.has(key)) this.tagIndex.set(key, new Set());
-        this.tagIndex.get(key)!.add(record.id);
-      }
-    }
-
     // Name index
     if (!this.nameIndex.has(record.name)) this.nameIndex.set(record.name, []);
     this.nameIndex.get(record.name)!.push(record.id);
@@ -490,13 +309,6 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       if (modIds.length === 0) this.moduleIndex.delete(record.module);
     }
 
-    // Tag index
-    if (record.docstring?.tags) {
-      for (const tag of record.docstring.tags) {
-        this.tagIndex.get(tag.toLowerCase())?.delete(id);
-      }
-    }
-
     // Name index
     const nameIds = this.nameIndex.get(record.name);
     if (nameIds) {
@@ -512,13 +324,12 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     this.records.clear();
     this.fileIndex.clear();
     this.moduleIndex.clear();
-    this.tagIndex.clear();
     this.nameIndex.clear();
     this.fileHashes.clear();
     this.fileMtimes.clear();
   }
 
-  private toFunctionRecord(raw: import("../types/index.js").RawFunctionInfo, filePath: string, hash: string): FunctionRecord {
+  private toFunctionRecord(raw: import("../types/index.js").RawFunctionInfo, filePath: string, _hash: string): FunctionRecord {
     const docstring = raw.docstring
       ? this.docstringParser.parse(raw.docstring, raw.kind === "class" ? "class" : "function")
       : null;
@@ -541,22 +352,12 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       decorators: raw.decorators,
       docstring,
       classInfo: raw.classInfo ? {
-        ...raw.classInfo,
-        implements: raw.classInfo.implements || [],
-        state: docstring?.state ?? [],
-        pattern: docstring?.pattern ?? [],
         inherits: docstring?.inherits ?? raw.classInfo.inherits,
-      } : undefined,
-      // Type relationships from classInfo (implements/extends come from parser)
-      typeRelationships: raw.classInfo ? {
         implements: raw.classInfo.implements || [],
-        extends: raw.classInfo.inherits || [],
-        usesTypes: [],
+        methods: raw.classInfo.methods,
       } : undefined,
       paramTypes: raw.paramTypes,
       structuralHints: raw.structuralHints,
-      fileHash: hash,
-      lastIndexedAt: Date.now(),
     };
   }
 

@@ -26,7 +26,7 @@ PLAN_ERR = {
 
 SELF_REVIEW_BODY = (
     "## 1. Review The Plan\n\n"
-    "Assume your reasoning has gaps; find them all.\n\n"
+    "Assume the plan has gaps; find them all.\n\n"
     "- **Alternatives**: Compare against viable options. Confirm the chosen approach is the strongest.\n"
     "- **Completeness**: Hunt for errors, gaps, missed edge cases, weak assumptions, hidden dependencies, unhandled failures.\n"
     "- **Quality**: Simplicity, SOLID, minimal failure surface, idempotent & resume-safe steps, performance. Flag over-engineering and unjustified abstractions.\n"

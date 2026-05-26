@@ -7,7 +7,7 @@ import type { FunctionRecord } from "../types/index.js";
 
 // Bump when parser behavior changes (e.g., visibility detection, new fields).
 // Old-version cache files are skipped on load → re-parsed by refreshStale → saved with new version.
-const AST_CACHE_VERSION = 5;
+const AST_CACHE_VERSION = 6;
 
 export class JsonFileRecordStore implements IRecordStore {
   constructor(private cacheDir: string) {}
@@ -60,19 +60,6 @@ export class JsonFileRecordStore implements IRecordStore {
     const fullPath = path.join(this.cacheDir, cacheFile);
     if (existsSync(fullPath)) {
       await unlink(fullPath).catch(() => {});
-    }
-  }
-
-  async getFileHash(filePath: string): Promise<string | null> {
-    const cacheFile = this.getCacheFileName(filePath);
-    const fullPath = path.join(this.cacheDir, cacheFile);
-    if (!existsSync(fullPath)) return null;
-    try {
-      const content = await readFile(fullPath, "utf-8");
-      const data = JSON.parse(content);
-      return data.fileHash || null;
-    } catch {
-      return null;
     }
   }
 

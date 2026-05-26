@@ -105,7 +105,6 @@ export class TreeSitterParser implements ILanguageParser {
   get sourceRoots(): string[] { return this.config.sourceRoots ?? []; }
   get workspaceManifests(): string[] { return this.config.workspaceManifests ?? []; }
   get workspaceManifestExtensions(): string[] { return this.config.workspaceManifestExtensions ?? []; }
-  get indexFileNames(): string[] { return this.config.indexFileNames ?? []; }
 
   // Import resolution — pass-through to config
   resolveImportPath(

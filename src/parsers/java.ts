@@ -220,7 +220,7 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
     if (path.length > 0) {
       const fullPath = path[0].text;
       const name = fullPath.split(".").pop() || fullPath;
-      results.push({ importedName: name, modulePath: fullPath, isDefault: false });
+      results.push({ importedName: name, modulePath: fullPath });
     }
   }
   return results;
@@ -236,9 +236,8 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
     const ext: string[] = superclass ? walkNodes(superclass, ["type_identifier"]).map((t: SyntaxNode) => t.text) : [];
     const impl: string[] = interfaces ? walkNodes(interfaces, ["type_identifier"]).map((t: SyntaxNode) => t.text) : [];
 
-    // Extract field types as class members + collect all referenced types
+    // Extract field types as class members
     const members: Array<{ name: string; type: string }> = [];
-    const usesTypesSet = new Set<string>();
     const body = node.childForFieldName("body");
     if (body) {
       for (let i = 0; i < body.childCount; i++) {
@@ -257,37 +256,11 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
           const fieldName = decl.childForFieldName("name")?.text;
           if (fieldName) members.push({ name: fieldName, type: typeName });
         }
-
-        // Track all type identifiers including generic args (e.g., List<UserRepository> → both List and UserRepository)
-        for (const tid of walkNodes(typeNode, ["type_identifier"])) {
-          if (!JAVA_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-        }
-      }
-
-      // Also collect types from method/constructor signatures
-      for (let i = 0; i < body.childCount; i++) {
-        const child = body.children[i];
-        if (child.type !== "method_declaration" && child.type !== "constructor_declaration") continue;
-        // Return type (methods only)
-        const retType = child.childForFieldName("type");
-        if (retType) {
-          for (const tid of walkNodes(retType, ["type_identifier"])) {
-            if (!JAVA_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-          }
-        }
-        // Parameter types
-        const params = child.childForFieldName("parameters");
-        if (params) {
-          for (const tid of walkNodes(params, ["type_identifier"])) {
-            if (!JAVA_PRIMITIVE_TYPES.has(tid.text)) usesTypesSet.add(tid.text);
-          }
-        }
       }
     }
-    const usesTypes = Array.from(usesTypesSet);
 
     results.push({
-      className: name, kind: "class", implements: impl, extends: ext, usesTypes,
+      className: name, kind: "class", implements: impl, extends: ext,
       members: members.length > 0 ? members : undefined,
       filePath, lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
     });
@@ -318,7 +291,7 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
     }
 
     results.push({
-      className: name, kind: "interface", implements: [], extends: ext, usesTypes: [],
+      className: name, kind: "interface", implements: [], extends: ext,
       members: members.length > 0 ? members : undefined,
       filePath, lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
     });

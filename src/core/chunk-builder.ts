@@ -3,7 +3,7 @@ import { truncateToTokens } from "../utils/token-estimator.js";
 
 const BODY_REPEAT_MAX_CHARS = 250;
 
-export interface ChunkConfig {
+interface ChunkConfig {
   expandCamelCase: boolean;
   maxChunkTokens?: number;
   returnTypePatterns?: readonly RegExp[];
@@ -129,7 +129,7 @@ function extractReturnType(signature: string, patterns?: readonly RegExp[]): str
   return match ? match[1].trim() : null;
 }
 
-export function expandIdentifiers(text: string): string {
+function expandIdentifiers(text: string): string {
   return text
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/_/g, " ");

@@ -23,8 +23,6 @@ export class FileWatcher implements IFileWatcher {
     this.ignoreFilter = ignore.default().add(config.parser.ignore);
   }
 
-  get isRunning(): boolean { return this._isRunning; }
-
   start(): void {
     if (this._isRunning) return;
     this._isRunning = true;
@@ -57,11 +55,6 @@ export class FileWatcher implements IFileWatcher {
     if (this.minIntervalTimer) clearTimeout(this.minIntervalTimer);
     this.pendingChanges.clear();
     logger.info("FileWatcher stopped");
-  }
-
-  notifyChanges(filePaths: string[]): void {
-    for (const fp of filePaths) this.pendingChanges.add(fp);
-    this.scheduleFlush();
   }
 
   // === Private ===

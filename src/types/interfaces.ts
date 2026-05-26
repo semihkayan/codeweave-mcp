@@ -8,9 +8,8 @@ import type {
 
 export interface IFunctionIndexReader {
   getById(id: string): FunctionRecord | null;
-  getByModule(module: string): FunctionRecord[];
   getByFile(filePath: string): FunctionRecord[];
-  findByName(name: string, module?: string): FunctionRecord[];
+  findByName(name: string): FunctionRecord[];
   getAllFilePaths(): string[];
   getFileRecordIds(filePath: string): string[];
   getFileHashes(): Map<string, string>;
@@ -36,7 +35,6 @@ export interface IEmbeddingProvider {
   embedDocuments(texts: string[]): Promise<Float32Array[]>;
   embedQuery(text: string): Promise<Float32Array>;
   isAvailable(): Promise<boolean>;
-  readonly dimensions: number;
 }
 
 // === Vector Database ===
@@ -44,11 +42,9 @@ export interface IEmbeddingProvider {
 export interface IVectorDatabase {
   initialize(connectionString: string, tableName?: string): Promise<void>;
   upsert(records: VectorRow[]): Promise<void>;
-  deleteByFile(filePath: string): Promise<void>;
   deleteByIds(ids: string[]): Promise<void>;
   vectorSearch(query: Float32Array, topK: number, filter?: SearchFilter): Promise<RankedResult[]>;
   searchByExactName(name: string, scope?: string): Promise<RankedResult[]>;
-  isEmpty(): Promise<boolean>;
   countRows(): Promise<number>;
   close?(): Promise<void>;
 }
@@ -84,13 +80,7 @@ export interface ISearchPipeline {
 
 export interface ICallGraphReader {
   getEntry(id: string): CallGraphEntry | undefined;
-  getTransitive(
-    startId: string,
-    direction: "downstream" | "upstream",
-    maxDepth: number,
-    bridgeNode?: (id: string) => string[]
-  ): { nodes: Array<{ id: string; depth: number }>; cycles: string[][] };
-  getStats(): { nodes: number; edges: number; cycles: number };
+  getStats(): { nodes: number; edges: number };
 }
 
 export interface ICallGraphWriter {
@@ -108,10 +98,7 @@ export interface ITypeGraphReader {
   getTypeNode(typeName: string): TypeNode | undefined;
   getImplementors(typeName: string): string[];
   getExtenders(typeName: string): string[];
-  getUsages(typeName: string): string[];
-  getTypeChain(typeName: string): string[];
   getMemberType(typeName: string, memberName: string): string | undefined;
-  getAllTypes(): string[];
   getStats(): { types: number; relationships: number };
 }
 
@@ -161,7 +148,6 @@ export interface IRecordStore {
   loadAll(): Promise<{ records: FunctionRecord[]; hashes: Map<string, string>; mtimes: Map<string, number> }>;
   saveFile(filePath: string, records: FunctionRecord[], hash: string, mtimeMs: number): Promise<void>;
   deleteFile(filePath: string): Promise<void>;
-  getFileHash(filePath: string): Promise<string | null>;
   deleteOrphans?(activeFiles: Set<string>): Promise<void>;
 }
 
@@ -181,15 +167,12 @@ export interface IStalenessChecker {
 export interface IFileWatcher {
   start(): void;
   stop(): void;
-  readonly isRunning: boolean;
-  notifyChanges(filePaths: string[]): void;
 }
 
 // === Reindex Orchestrator ===
 
 export interface ReindexResult {
   mode: string;
-  changedFunctions: number;
   embedded: number;
   elapsedMs: number;
 }
@@ -225,7 +208,6 @@ export interface LanguageConventions {
   readonly sourceRoots: readonly string[];
   readonly workspaceManifests: readonly string[];
   readonly workspaceManifestExtensions: readonly string[];
-  readonly indexFileNames: readonly string[];
 }
 
 // === Workspace Services (per-workspace isolated) ===
@@ -282,7 +264,6 @@ export interface Config {
     highConfidenceThreshold: number;
     rrfK: number;
     expandCamelCase: boolean;
-    exactNameBoost: boolean;
     density: {
       enabled: boolean;
       floor: number;
@@ -302,7 +283,6 @@ export interface Config {
     };
   };
   indexing: {
-    parallelWorkers: number;
     maxFileSizeKb: number;
     maxChunkTokens: number;
   };

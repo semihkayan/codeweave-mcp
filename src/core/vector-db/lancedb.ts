@@ -51,13 +51,6 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
     await this.table.add(rows);
   }
 
-  async deleteByFile(filePath: string): Promise<void> {
-    if (!this.table) return;
-    try {
-      await this.table.delete(`filePath = '${escapeSql(filePath)}'`);
-    } catch { /* may not exist */ }
-  }
-
   async deleteByIds(ids: string[]): Promise<void> {
     if (!this.table || ids.length === 0) return;
     const batchSize = 500;
@@ -118,15 +111,6 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
     }
   }
 
-  async isEmpty(): Promise<boolean> {
-    if (!this.table) return true;
-    try {
-      return (await this.table.countRows()) === 0;
-    } catch {
-      return true;
-    }
-  }
-
   async countRows(): Promise<number> {
     if (!this.table) return 0;
     try {
@@ -134,15 +118,6 @@ export class LanceDBStore implements IVectorDatabase, IFullTextSearch {
     } catch {
       return 0;
     }
-  }
-
-  async dropTable(): Promise<void> {
-    if (!this.db || !this.table) return;
-    try {
-      await this.db.dropTable(this._tableName);
-      this.table = null;
-      this._ftsAvailable = false;
-    } catch { /* table may not exist */ }
   }
 
   async close(): Promise<void> {

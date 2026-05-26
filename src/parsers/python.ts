@@ -162,7 +162,6 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
         results.push({
           importedName: name.text,
           modulePath: name.text,
-          isDefault: true,
         });
       }
     } else if (node.type === "import_from_statement") {
@@ -177,14 +176,12 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
           results.push({
             importedName: child.text,
             modulePath,
-            isDefault: false,
           });
         } else if (child.type === "aliased_import") {
           const origName = child.childForFieldName("name");
           results.push({
             importedName: origName?.text || child.text,
             modulePath,
-            isDefault: false,
           });
         }
       }
@@ -211,35 +208,11 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
       }
     }
 
-    // Extract type hints from method signatures
-    const usesTypes: string[] = [];
-    const methods = walkNodes(node, ["function_definition"]);
-    for (const method of methods) {
-      const params = method.childForFieldName("parameters");
-      if (params) {
-        const typeNodes = walkNodes(params, ["type"]);
-        for (const t of typeNodes) {
-          const typeName = t.text?.trim();
-          if (typeName && !["str", "int", "float", "bool", "None", "list", "dict", "tuple", "set"].includes(typeName)) {
-            if (!usesTypes.includes(typeName)) usesTypes.push(typeName);
-          }
-        }
-      }
-      const retType = method.childForFieldName("return_type");
-      if (retType) {
-        const typeName = retType.text?.trim();
-        if (typeName && !["str", "int", "float", "bool", "None", "list", "dict", "tuple", "set"].includes(typeName)) {
-          if (!usesTypes.includes(typeName)) usesTypes.push(typeName);
-        }
-      }
-    }
-
     results.push({
       className: name,
       kind: "class",
       implements: [],  // Python has no explicit implements
       extends: extendsArr,
-      usesTypes,
       filePath,
       lineStart: node.startPosition.row + 1,
       lineEnd: node.endPosition.row + 1,

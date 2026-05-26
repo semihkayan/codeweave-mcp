@@ -26,7 +26,7 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
 
     await ws.indexWriter.saveToDisk();
 
-    return { mode: "full_rebuild", changedFunctions: allIds.length, embedded, elapsedMs: Date.now() - start };
+    return { mode: "full_rebuild", embedded, elapsedMs: Date.now() - start };
   }
 
   async reindexIncremental(ws: WorkspaceServices, wsPath: string): Promise<ReindexResult> {
@@ -38,10 +38,10 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
       await this.rebuildGraphs(ws, wsPath);
       const embedded = await this.embedIfAvailable(changedIds, ws);
       await ws.indexWriter.saveToDisk();
-      return { mode: "incremental", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
+      return { mode: "incremental", embedded, elapsedMs: Date.now() - start };
     }
 
-    return { mode: "incremental", changedFunctions: 0, embedded: 0, elapsedMs: Date.now() - start };
+    return { mode: "incremental", embedded: 0, elapsedMs: Date.now() - start };
   }
 
   async reindexFiles(ws: WorkspaceServices, wsPath: string, files: string[]): Promise<ReindexResult> {
@@ -53,10 +53,10 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
       await this.rebuildGraphs(ws, wsPath);
       const embedded = await this.embedIfAvailable(changedIds, ws);
       await ws.indexWriter.saveToDisk();
-      return { mode: "specific_files", changedFunctions: changedIds.length, embedded, elapsedMs: Date.now() - start };
+      return { mode: "specific_files", embedded, elapsedMs: Date.now() - start };
     }
 
-    return { mode: "specific_files", changedFunctions: 0, embedded: 0, elapsedMs: Date.now() - start };
+    return { mode: "specific_files", embedded: 0, elapsedMs: Date.now() - start };
   }
 
   async handleFileChanges(ws: WorkspaceServices, wsPath: string, changedFiles: string[]): Promise<void> {

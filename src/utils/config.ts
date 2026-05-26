@@ -42,7 +42,6 @@ const ConfigSchema = z.object({
     highConfidenceThreshold: z.number().min(0).max(1).default(0.6),
     rrfK: z.number().default(60),
     expandCamelCase: z.boolean().default(true),
-    exactNameBoost: z.boolean().default(true),
     density: z.object({
       enabled: z.boolean().default(true),
       floor: z.number().min(0).max(1).default(0.65),
@@ -62,7 +61,6 @@ const ConfigSchema = z.object({
     }).default({}),
   }).default({}),
   indexing: z.object({
-    parallelWorkers: z.number().default(4),
     maxFileSizeKb: z.number().default(500),
     maxChunkTokens: z.number().default(2000),
   }).default({}),

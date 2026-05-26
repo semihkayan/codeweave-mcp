@@ -11,9 +11,6 @@ export async function readFile(filePath: string, encoding: BufferEncoding = "utf
   return fsReadFile(filePath, { encoding });
 }
 
-export async function readFileBuffer(filePath: string): Promise<Buffer> {
-  return fsReadFile(filePath);
-}
 
 export async function globSourceFiles(projectRoot: string, config: Config): Promise<string[]> {
   const allExtensions = Object.values(config.parser.languages).flat();

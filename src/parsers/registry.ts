@@ -90,7 +90,6 @@ export function aggregateLanguageConventions(parsers: TreeSitterParser[]): Langu
   const sourceRoots: string[] = [];
   const workspaceManifests: string[] = [];
   const workspaceManifestExtensions: string[] = [];
-  const indexFileNames: string[] = [];
 
   for (const p of parsers) {
     for (const k of p.selfKeywords) selfKeywords.add(k);
@@ -99,7 +98,6 @@ export function aggregateLanguageConventions(parsers: TreeSitterParser[]): Langu
     for (const r of p.sourceRoots) { if (!sourceRoots.includes(r)) sourceRoots.push(r); }
     for (const m of p.workspaceManifests) { if (!workspaceManifests.includes(m)) workspaceManifests.push(m); }
     for (const e of p.workspaceManifestExtensions) { if (!workspaceManifestExtensions.includes(e)) workspaceManifestExtensions.push(e); }
-    for (const i of p.indexFileNames) { if (!indexFileNames.includes(i)) indexFileNames.push(i); }
   }
 
   // Sort sourceRoots longest-first for correct prefix stripping
@@ -107,6 +105,6 @@ export function aggregateLanguageConventions(parsers: TreeSitterParser[]): Langu
 
   return {
     selfKeywords, constructorNames, returnTypePatterns, sourceRoots,
-    workspaceManifests, workspaceManifestExtensions, indexFileNames,
+    workspaceManifests, workspaceManifestExtensions,
   };
 }

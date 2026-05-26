@@ -53,12 +53,11 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
       // Remove references FROM this file (both own nodes and references to this file's classes)
       node.implementors = node.implementors.filter(id => !id.startsWith(filePrefix));
       node.extenders = node.extenders.filter(id => !id.startsWith(filePrefix));
-      node.usedBy = node.usedBy.filter(id => !id.startsWith(filePrefix));
     }
 
     // Clean up empty shell nodes (no file, no references) to avoid unbounded growth
     for (const [name, node] of this.graph) {
-      if (!node.filePath && node.implementors.length === 0 && node.extenders.length === 0 && node.usedBy.length === 0) {
+      if (!node.filePath && node.implementors.length === 0 && node.extenders.length === 0) {
         this.graph.delete(name);
       }
     }
@@ -78,46 +77,14 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
     return this.graph.get(typeName)?.extenders || [];
   }
 
-  getUsages(typeName: string): string[] {
-    return this.graph.get(typeName)?.usedBy || [];
-  }
-
   getMemberType(typeName: string, memberName: string): string | undefined {
     return this.graph.get(typeName)?.members[memberName];
-  }
-
-  getTypeChain(typeName: string): string[] {
-    // Downward: typeName → extenders (recursive BFS)
-    const chain: string[] = [typeName];
-    const visited = new Set<string>([typeName]);
-    const queue = [typeName];
-
-    while (queue.length > 0) {
-      const current = queue.shift()!;
-      const node = this.graph.get(current);
-      if (!node) continue;
-
-      for (const extenderId of node.extenders) {
-        const name = extenderId.split("::").pop()!;
-        if (!visited.has(name)) {
-          visited.add(name);
-          chain.push(name);
-          queue.push(name);
-        }
-      }
-    }
-
-    return chain;
-  }
-
-  getAllTypes(): string[] {
-    return Array.from(this.graph.keys());
   }
 
   getStats(): { types: number; relationships: number } {
     let relationships = 0;
     for (const node of this.graph.values()) {
-      relationships += node.implementors.length + node.extenders.length + node.usedBy.length;
+      relationships += node.implementors.length + node.extenders.length;
     }
     return { types: this.graph.size, relationships };
   }
@@ -170,11 +137,6 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
         const node = this.ensureNode(base, "class", "", 0, 0);
         if (!node.extenders.includes(classId)) node.extenders.push(classId);
       }
-      for (const typeName of rel.usesTypes) {
-        const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-        if (!node.usedBy.includes(classId)) node.usedBy.push(classId);
-      }
-
       if (rel.members) {
         const node = this.graph.get(rel.className);
         if (node) {
@@ -185,15 +147,6 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
       }
     }
 
-    // Also track function-level type usages from typeRelationships on records
-    for (const rec of index.getByFile(filePath)) {
-      if (rec.typeRelationships) {
-        for (const typeName of rec.typeRelationships.usesTypes) {
-          const node = this.ensureNode(typeName, "type_alias", "", 0, 0);
-          if (!node.usedBy.includes(rec.id)) node.usedBy.push(rec.id);
-        }
-      }
-    }
   }
 
   private ensureNode(
@@ -202,7 +155,7 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
   ): TypeNode {
     let node = this.graph.get(name);
     if (!node) {
-      node = { name, kind, filePath, lineStart, lineEnd, implementors: [], extenders: [], usedBy: [], members: {} };
+      node = { name, kind, filePath, lineStart, lineEnd, implementors: [], extenders: [], members: {} };
       this.graph.set(name, node);
     }
     if (filePath && !node.filePath) {

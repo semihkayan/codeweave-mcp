@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 import type { RawFunctionInfo, RawCallInfo, RawImportInfo, RawTypeRelationship, StructuralHints } from "../types/index.js";
 import type { TreeSitterLanguageConfig } from "./tree-sitter-parser.js";
-import { walkNodes, findParent, type SyntaxNode } from "./ast-utils.js";
+import { walkNodes, type SyntaxNode } from "./ast-utils.js";
 import { resolveRelativeImport } from "./resolve-utils.js";
 
 function getTsDecorators(node: SyntaxNode): string[] | undefined {
@@ -320,18 +320,18 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
 
       if (child.type === "identifier") {
         // Default import: import Foo from './foo'
-        results.push({ importedName: child.text, modulePath, isDefault: true });
+        results.push({ importedName: child.text, modulePath });
       } else if (child.type === "named_imports") {
         // Named imports: import { Foo, Bar } from './foo'
         const specifiers = walkNodes(child, ["import_specifier"]);
         for (const spec of specifiers) {
           const nameNode = spec.childForFieldName("name");
-          results.push({ importedName: nameNode?.text || spec.text, modulePath, isDefault: false });
+          results.push({ importedName: nameNode?.text || spec.text, modulePath });
         }
       } else if (child.type === "namespace_import") {
         // Namespace: import * as Foo from './foo'
         const name = child.children.find((c: SyntaxNode) => c.type === "identifier");
-        if (name) results.push({ importedName: name.text, modulePath, isDefault: false });
+        if (name) results.push({ importedName: name.text, modulePath });
       }
     }
   }
@@ -362,24 +362,9 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
       }
     }
 
-    // Collect type usages from method signatures
-    const usesTypes: string[] = [];
-    const methods = walkNodes(node, ["method_definition"]);
-    for (const method of methods) {
-      const typeAnnotations = walkNodes(method, ["type_annotation"]);
-      for (const ta of typeAnnotations) {
-        const typeIds = walkNodes(ta, ["type_identifier"]);
-        for (const tid of typeIds) {
-          const t = tid.text;
-          if (!["string", "number", "boolean", "void", "any", "never", "unknown", "null", "undefined"].includes(t)) {
-            if (!usesTypes.includes(t)) usesTypes.push(t);
-          }
-        }
-      }
-    }
-
     // Extract constructor field types (private/readonly params become class fields)
     const members: Array<{ name: string; type: string }> = [];
+    const methods = walkNodes(node, ["method_definition"]);
     for (const method of methods) {
       const methodName = method.children.find((c: SyntaxNode) => c.type === "property_identifier")?.text;
       if (methodName !== "constructor") continue;
@@ -405,7 +390,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
       kind: "class",
       implements: implementsList,
       extends: extendsList,
-      usesTypes,
       members: members.length > 0 ? members : undefined,
       filePath,
       lineStart: node.startPosition.row + 1,
@@ -447,7 +431,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
       kind: "interface",
       implements: [],
       extends: [],
-      usesTypes: [],
       members: members.length > 0 ? members : undefined,
       filePath,
       lineStart: node.startPosition.row + 1,

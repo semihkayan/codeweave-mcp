@@ -113,7 +113,7 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
     if (arg) {
       const path = arg.text;
       const name = path.split("::").pop() || path;
-      results.push({ importedName: name, modulePath: path, isDefault: false });
+      results.push({ importedName: name, modulePath: path });
     }
   }
   return results;
@@ -132,7 +132,6 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
         kind: "struct",
         implements: [traitNode.text],
         extends: [],
-        usesTypes: [],
         filePath,
         lineStart: node.startPosition.row + 1,
         lineEnd: node.endPosition.row + 1,

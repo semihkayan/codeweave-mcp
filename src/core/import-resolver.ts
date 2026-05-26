@@ -15,7 +15,7 @@ export class ImportResolver implements IImportResolver {
 
     for (const imp of rawImports) {
       const resolved = this.resolveImportPath(parser, imp.modulePath, filePath, projectRoot);
-      result.set(imp.importedName, { module: imp.modulePath, resolvedPath: resolved });
+      result.set(imp.importedName, { resolvedPath: resolved });
     }
 
     return result;

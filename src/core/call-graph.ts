@@ -94,75 +94,12 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
     return this.graph.get(id);
   }
 
-  getTransitive(
-    startId: string,
-    direction: "downstream" | "upstream",
-    maxDepth: number,
-    bridgeNode?: (id: string) => string[]
-  ): { nodes: Array<{ id: string; depth: number }>; cycles: string[][] } {
-    const visited = new Set<string>();
-    const bridged = new Set<string>();
-    const result: Array<{ id: string; depth: number }> = [];
-    const cycles: string[][] = [];
-    const parentMap = new Map<string, string | null>();
-    const queue: Array<{ id: string; depth: number }> = [{ id: startId, depth: 0 }];
-    parentMap.set(startId, null);
-
-    while (queue.length > 0) {
-      const { id, depth } = queue.shift()!;
-      if (depth > maxDepth) continue;
-
-      if (visited.has(id)) {
-        // Reconstruct cycle
-        const cyclePath: string[] = [id];
-        let current = parentMap.get(id) ?? null;
-        while (current && current !== id) {
-          cyclePath.unshift(current);
-          current = parentMap.get(current) ?? null;
-        }
-        if (current === id) cyclePath.unshift(id);
-        cycles.push(cyclePath);
-        continue;
-      }
-      if (bridged.has(id)) continue;
-      visited.add(id);
-      if (depth > 0) result.push({ id, depth });
-
-      const entry = this.graph.get(id);
-      if (!entry) continue;
-
-      const neighbors = direction === "downstream"
-        ? entry.calls.filter(c => c.resolvedId).map(c => c.resolvedId!)
-        : entry.calledBy.map(c => c.caller);
-
-      if (bridgeNode) {
-        for (const bridgeId of bridgeNode(id)) {
-          if (visited.has(bridgeId) || bridged.has(bridgeId)) continue;
-          bridged.add(bridgeId);
-          const bridgeEntry = this.graph.get(bridgeId);
-          if (!bridgeEntry) continue;
-          const extra = direction === "downstream"
-            ? bridgeEntry.calls.filter(c => c.resolvedId).map(c => c.resolvedId!)
-            : bridgeEntry.calledBy.map(c => c.caller);
-          neighbors.push(...extra);
-        }
-      }
-
-      for (const neighborId of neighbors) {
-        if (!parentMap.has(neighborId)) parentMap.set(neighborId, id);
-        queue.push({ id: neighborId, depth: depth + 1 });
-      }
-    }
-
-    return { nodes: result, cycles };
-  }
-
-  getStats(): { nodes: number; edges: number; cycles: number } {
+  getStats(): { nodes: number; edges: number } {
     let resolvedEdges = 0;
     for (const entry of this.graph.values()) {
       resolvedEdges += entry.calls.filter(c => c.resolvedId).length;
     }
-    return { nodes: this.graph.size, edges: resolvedEdges, cycles: 0 };
+    return { nodes: this.graph.size, edges: resolvedEdges };
   }
 
   async saveToDisk(cacheDir: string, index: IFunctionIndexReader): Promise<void> {
@@ -217,7 +154,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
         const resolvedCalls = rawCalls.map(call => {
           const target = call.objectName ? `${call.objectName}.${call.name}` : call.name;
           const resolvedFile = this.resolveCallTarget(call, imports, filePath);
-          return { target, resolvedFile, resolvedId: null as string | null, line: call.line };
+          return { target, resolvedFile, resolvedId: null as string | null };
         });
 
         this.graph.set(recordId, { calls: resolvedCalls, calledBy: [] });
@@ -447,8 +384,6 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
     for (const callerId of entryIds) {
       const entry = this.graph.get(callerId);
       if (!entry) continue;
-      const callerRecord = index.getById(callerId);
-      if (!callerRecord) continue;
 
       for (const call of entry.calls) {
         if (!call.resolvedId) continue;
@@ -457,12 +392,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
 
         const alreadyTracked = targetEntry.calledBy.some(c => c.caller === callerId);
         if (!alreadyTracked) {
-          targetEntry.calledBy.push({
-            caller: callerId,
-            callerName: callerRecord.name,
-            file: callerRecord.filePath,
-            line: call.line,
-          });
+          targetEntry.calledBy.push({ caller: callerId });
         }
       }
     }
@@ -472,7 +402,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
    * Build the complete reverse graph from scratch.
    * Used by full rebuild only — clears all calledBy arrays and rebuilds from forward edges.
    */
-  private buildReverseGraph(index: IFunctionIndexReader): void {
+  private buildReverseGraph(_index: IFunctionIndexReader): void {
     // Clear all calledBy arrays first to avoid stale/duplicate entries
     for (const entry of this.graph.values()) {
       entry.calledBy = [];
@@ -481,20 +411,12 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
     for (const [callerId, entry] of this.graph) {
       for (const call of entry.calls) {
         if (call.resolvedId) {
-          const callerRecord = index.getById(callerId);
-          if (!callerRecord) continue;
           const targetEntry = this.graph.get(call.resolvedId);
           if (targetEntry) {
-            // Deduplicate: one calledBy entry per unique caller (a function may call
-            // the same target multiple times at different lines — only track the link once)
+            // Deduplicate: one calledBy entry per unique caller
             const alreadyTracked = targetEntry.calledBy.some(c => c.caller === callerId);
             if (!alreadyTracked) {
-              targetEntry.calledBy.push({
-                caller: callerId,
-                callerName: callerRecord.name,
-                file: callerRecord.filePath,
-                line: call.line,
-              });
+              targetEntry.calledBy.push({ caller: callerId });
             }
           }
         }

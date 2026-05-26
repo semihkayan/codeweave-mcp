@@ -24,16 +24,7 @@ export interface FunctionRecord {
   classInfo?: {
     inherits: string[];
     implements: string[];
-    state: string[];
-    pattern: string[];
     methods: string[];
-  };
-
-  // Type relationships (all languages)
-  typeRelationships?: {
-    implements: string[];        // TS implements, Java implements, Go implicit, Rust impl Trait
-    extends: string[];           // TS/Java/Python extends/inheritance
-    usesTypes: string[];         // Signature types: ["Order", "Result"]
   };
 
   // Parameter types (for type-aware call resolution)
@@ -42,9 +33,6 @@ export interface FunctionRecord {
   // Parser-detected structural classification (overrides heuristics in density scorer)
   structuralHints?: StructuralHints;
 
-  // Metadata
-  fileHash: string;
-  lastIndexedAt: number;
 }
 
 export interface StructuralHints {
@@ -55,17 +43,13 @@ export interface StructuralHints {
 }
 
 export interface ParsedDocstring {
-  raw: string;
   summary: string;
   body: string;
   deps: string[];
   sideEffects: string[];
   tags: string[];
-  complexity: string | null;
   // Class-specific
   inherits?: string[];
-  state?: string[];
-  pattern?: string[];
 }
 
 // === Vector DB Types ===
@@ -90,13 +74,9 @@ export interface CallGraphEntry {
     target: string;
     resolvedFile: string | null;
     resolvedId: string | null;
-    line: number;
   }>;
   calledBy: Array<{
     caller: string;
-    callerName: string;
-    file: string;
-    line: number;
   }>;
 }
 
@@ -112,7 +92,6 @@ export interface TypeNode {
   lineEnd: number;
   implementors: string[];
   extenders: string[];
-  usedBy: string[];
   members: Record<string, string>;  // property/field name → type name
 }
 
@@ -147,7 +126,6 @@ export interface SearchFilter {
 // === Parser Types ===
 
 export type ImportMap = Map<string, {
-  module: string;
   resolvedPath: string | null;
 }>;
 
@@ -175,7 +153,6 @@ export interface RawCallInfo {
 export interface RawImportInfo {
   importedName: string;
   modulePath: string;
-  isDefault: boolean;
 }
 
 export interface RawTypeRelationship {
@@ -183,18 +160,10 @@ export interface RawTypeRelationship {
   kind: "class" | "interface" | "type_alias" | "trait" | "struct" | "record";
   implements: string[];
   extends: string[];
-  usesTypes: string[];
   members?: Array<{ name: string; type: string }>;  // property/field → type
   filePath: string;
   lineStart: number;
   lineEnd: number;
-}
-
-// === Workspace Types ===
-
-export interface DetectedWorkspace {
-  path: string;
-  manifests: string[];
 }
 
 // === Error Types ===
@@ -206,18 +175,3 @@ export class EmbedderError extends Error {
   }
 }
 
-export enum ErrorCode {
-  OLLAMA_UNAVAILABLE = "OLLAMA_UNAVAILABLE",
-  MODEL_NOT_FOUND = "MODEL_NOT_FOUND",
-  INDEX_EMPTY = "INDEX_EMPTY",
-  MODULE_NOT_FOUND = "MODULE_NOT_FOUND",
-  FUNCTION_NOT_FOUND = "FUNCTION_NOT_FOUND",
-  AMBIGUOUS_FUNCTION = "AMBIGUOUS_FUNCTION",
-  PARSE_ERROR = "PARSE_ERROR",
-  CONFIG_ERROR = "CONFIG_ERROR",
-  INDEX_CORRUPT = "INDEX_CORRUPT",
-  EMBEDDING_DIMENSION_MISMATCH = "EMBEDDING_DIMENSION_MISMATCH",
-  FTS_INDEX_FAILED = "FTS_INDEX_FAILED",
-  WORKSPACE_REQUIRED = "WORKSPACE_REQUIRED",
-  WORKSPACE_NOT_FOUND = "WORKSPACE_NOT_FOUND",
-}

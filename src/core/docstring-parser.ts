@@ -4,16 +4,12 @@ import type { IDocstringParser } from "../types/interfaces.js";
 export class DocstringParser implements IDocstringParser {
   parse(raw: string, kind: "function" | "method" | "class"): ParsedDocstring {
     return {
-      raw,
       summary: this.extractSummary(raw),
       body: this.stripAnnotationFields(raw),
       deps: this.extractField(raw, "deps"),
       sideEffects: this.extractField(raw, "side_?effects"),
       tags: this.extractField(raw, "tags"),
-      complexity: this.extractSingleField(raw, "complexity"),
       inherits: kind === "class" ? this.extractField(raw, "inherits") : undefined,
-      state: kind === "class" ? this.extractField(raw, "state") : undefined,
-      pattern: kind === "class" ? this.extractField(raw, "pattern") : undefined,
     };
   }
 
@@ -41,8 +37,4 @@ export class DocstringParser implements IDocstringParser {
       .trim();
   }
 
-  private extractSingleField(raw: string, fieldName: string): string | null {
-    const pattern = new RegExp(`@${fieldName}:\\s*(.+?)(?=\\n\\s*@|\\n\\s*$|$)`, "si");
-    return raw.match(pattern)?.[1]?.trim() || null;
-  }
 }

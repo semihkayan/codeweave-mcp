@@ -1,6 +1,6 @@
 import type { AppContext, WorkspaceServices, NoiseFilterMetadata } from "../types/interfaces.js";
 
-export type ResolvedWorkspace = { ws: WorkspaceServices; wsPath: string };
+type ResolvedWorkspace = { ws: WorkspaceServices; wsPath: string };
 
 export function checkReady(ctx: AppContext): ReturnType<typeof errorResponse> | null {
   if (!ctx.ready) {
@@ -71,7 +71,7 @@ export function isNoisyCall(target: string, noise: NoiseFilterMetadata): boolean
   return false;
 }
 
-export function errorResponse(code: string, message: string, suggestion?: string, details?: unknown) {
+function errorResponse(code: string, message: string, suggestion?: string, details?: unknown) {
   return {
     content: [{ type: "text" as const, text: JSON.stringify(Object.assign({ error: code, message, suggestion }, details ? { details } : {})) }],
     isError: true,

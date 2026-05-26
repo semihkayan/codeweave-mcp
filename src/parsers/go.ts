@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 import type { RawFunctionInfo, RawCallInfo, RawImportInfo, RawTypeRelationship } from "../types/index.js";
 import type { TreeSitterLanguageConfig } from "./tree-sitter-parser.js";
-import { walkNodes, findParent, type SyntaxNode } from "./ast-utils.js";
+import { walkNodes, type SyntaxNode } from "./ast-utils.js";
 
 function getDocComment(node: SyntaxNode): string | null {
   const parent = node.parent;
@@ -112,7 +112,7 @@ function extractImports(rootNode: SyntaxNode, _filePath: string): RawImportInfo[
       if (pathNode) {
         const modulePath = pathNode.text.replace(/"/g, "");
         const name = modulePath.split("/").pop() || modulePath;
-        results.push({ importedName: name, modulePath, isDefault: false });
+        results.push({ importedName: name, modulePath });
       }
     }
   }
@@ -130,7 +130,7 @@ function extractTypeRelationships(rootNode: SyntaxNode, filePath: string): RawTy
     const typeNode = spec.childForFieldName("type");
     const kind = typeNode?.type === "interface_type" ? "interface" as const : "struct" as const;
     results.push({
-      className: name, kind, implements: [], extends: [], usesTypes: [],
+      className: name, kind, implements: [], extends: [],
       filePath, lineStart: node.startPosition.row + 1, lineEnd: node.endPosition.row + 1,
     });
   }
