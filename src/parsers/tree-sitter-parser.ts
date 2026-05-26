@@ -33,7 +33,6 @@ export interface TreeSitterLanguageConfig {
   sourceRoots?: string[];
   workspaceManifests?: string[];
   workspaceManifestExtensions?: string[];
-  indexFileNames?: string[];
 
   // Import resolution (optional — called by ImportResolver per-file)
   resolveImportPath?(

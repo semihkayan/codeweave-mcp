@@ -132,7 +132,7 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     if (!func) continue;
 
     if (func.type === "identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     } else if (func.type === "attribute") {
       const obj = func.childForFieldName("object");
       const attr = func.childForFieldName("attribute");
@@ -140,7 +140,6 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
         results.push({
           name: attr.text,
           objectName: obj?.text,
-          line: row,
         });
       }
     }
@@ -278,7 +277,6 @@ export const pythonConfig: TreeSitterLanguageConfig = {
   returnTypePattern: /\)\s*->\s*(.+)$/,
   sourceRoots: [],
   workspaceManifests: ["pyproject.toml", "requirements.txt", "setup.py"],
-  indexFileNames: ["__init__.py"],
 
   // Import resolution
   isExternalImport: (modulePath) => !modulePath.startsWith("."),

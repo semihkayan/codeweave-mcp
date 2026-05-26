@@ -291,12 +291,12 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     if (!func) continue;
 
     if (func.type === "identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     } else if (func.type === "member_expression") {
       const obj = func.childForFieldName("object");
       const prop = func.childForFieldName("property");
       if (prop) {
-        results.push({ name: prop.text, objectName: obj?.text, line: row });
+        results.push({ name: prop.text, objectName: obj?.text });
       }
     }
   }
@@ -511,7 +511,6 @@ export const typescriptConfig: TreeSitterLanguageConfig = {
   returnTypePattern: /\)\s*:\s*(.+)$/,
   sourceRoots: [],
   workspaceManifests: ["package.json", "tsconfig.json"],
-  indexFileNames: ["index.ts", "index.tsx", "index.js", "index.jsx"],
 
   // Import resolution
   isExternalImport: (modulePath) => !modulePath.startsWith(".") && !modulePath.startsWith("/"),

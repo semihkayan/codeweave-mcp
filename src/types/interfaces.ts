@@ -86,7 +86,7 @@ export interface ICallGraphReader {
 export interface ICallGraphWriter {
   build(index: IFunctionIndexReader, projectRoot: string): Promise<CallGraph>;
   buildForFiles(files: string[], index: IFunctionIndexReader, projectRoot: string): Promise<void>;
-  removeByFile(filePath: string, index: IFunctionIndexReader): void;
+  removeByFile(filePath: string): void;
   saveToDisk(cacheDir: string, index: IFunctionIndexReader): Promise<void>;
   loadFromDisk(cacheDir: string, index: IFunctionIndexReader): Promise<boolean>;
   clear(): void;
@@ -139,7 +139,7 @@ export interface IImportResolver {
 // === Docstring Parsing ===
 
 export interface IDocstringParser {
-  parse(raw: string, kind: "function" | "method" | "class"): ParsedDocstring;
+  parse(raw: string, kind: "function" | "class"): ParsedDocstring;
 }
 
 // === Persistence ===

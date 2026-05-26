@@ -1,11 +1,8 @@
-import { readFile as fsReadFile, readdir, stat as fsStat } from "node:fs/promises";
-import { existsSync } from "node:fs";
+import { readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import path from "node:path";
 import { glob } from "glob";
 import ignore from "ignore";
 import type { Config } from "../types/interfaces.js";
-
-export { existsSync };
 
 export async function readFile(filePath: string, encoding: BufferEncoding = "utf-8"): Promise<string> {
   return fsReadFile(filePath, { encoding });

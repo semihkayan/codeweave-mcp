@@ -197,11 +197,11 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     const func = node.childForFieldName("function");
     if (!func) continue;
     if (func.type === "identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     } else if (func.type === "member_access_expression") {
       const obj = func.childForFieldName("expression");
       const name = func.childForFieldName("name");
-      if (name) results.push({ name: name.text, objectName: obj?.text, line: row });
+      if (name) results.push({ name: name.text, objectName: obj?.text });
     }
   }
   return results;

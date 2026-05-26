@@ -94,13 +94,13 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     const func = node.childForFieldName("function");
     if (!func) continue;
     if (func.type === "identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     } else if (func.type === "field_expression") {
       const obj = func.childForFieldName("value");
       const field = func.childForFieldName("field");
-      if (field) results.push({ name: field.text, objectName: obj?.text, line: row });
+      if (field) results.push({ name: field.text, objectName: obj?.text });
     } else if (func.type === "scoped_identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     }
   }
   return results;

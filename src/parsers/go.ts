@@ -94,11 +94,11 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     const func = node.childForFieldName("function");
     if (!func) continue;
     if (func.type === "identifier") {
-      results.push({ name: func.text, line: row });
+      results.push({ name: func.text });
     } else if (func.type === "selector_expression") {
       const obj = func.childForFieldName("operand");
       const field = func.childForFieldName("field");
-      if (field) results.push({ name: field.text, objectName: obj?.text, line: row });
+      if (field) results.push({ name: field.text, objectName: obj?.text });
     }
   }
   return results;

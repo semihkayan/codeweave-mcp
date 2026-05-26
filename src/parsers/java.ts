@@ -208,7 +208,7 @@ function extractCalls(rootNode: SyntaxNode, lineStart: number, lineEnd: number):
     if (row < lineStart || row > lineEnd) continue;
     const obj = node.childForFieldName("object");
     const name = node.childForFieldName("name");
-    if (name) results.push({ name: name.text, objectName: obj?.text, line: row });
+    if (name) results.push({ name: name.text, objectName: obj?.text });
   }
   return results;
 }

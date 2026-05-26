@@ -225,7 +225,7 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
       // Build records
       const fileRecords: FunctionRecord[] = [];
       for (const raw of rawFunctions) {
-        fileRecords.push(this.toFunctionRecord(raw, relPath, newHash));
+        fileRecords.push(this.toFunctionRecord(raw, relPath));
       }
 
       // Mark test files structurally (decorator + import analysis)
@@ -329,7 +329,7 @@ export class FunctionIndex implements IFunctionIndexReader, IFunctionIndexWriter
     this.fileMtimes.clear();
   }
 
-  private toFunctionRecord(raw: import("../types/index.js").RawFunctionInfo, filePath: string, _hash: string): FunctionRecord {
+  private toFunctionRecord(raw: import("../types/index.js").RawFunctionInfo, filePath: string): FunctionRecord {
     const docstring = raw.docstring
       ? this.docstringParser.parse(raw.docstring, raw.kind === "class" ? "class" : "function")
       : null;

@@ -8,19 +8,19 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** Log-scale body size: 1 line→0.0, 10→0.50, 30→0.74, 100+→1.0 */
-export function normalizeBodySize(record: FunctionRecord): number {
+function normalizeBodySize(record: FunctionRecord): number {
   const lines = record.lineEnd - record.lineStart + 1;
   if (lines <= 1) return 0;
   return clamp(Math.log2(lines) / Math.log2(100), 0, 1);
 }
 
 /** Binary: someone thought this function worth documenting */
-export function normalizeDocstring(record: FunctionRecord): number {
+function normalizeDocstring(record: FunctionRecord): number {
   return record.docstring ? 1.0 : 0.0;
 }
 
 /** Structured metadata depth: tags + deps + sideEffects */
-export function normalizeDocstringRichness(record: FunctionRecord): number {
+function normalizeDocstringRichness(record: FunctionRecord): number {
   if (!record.docstring) return 0;
   const count =
     (record.docstring.tags?.length || 0) +
@@ -33,7 +33,7 @@ export function normalizeDocstringRichness(record: FunctionRecord): number {
  * Parameter count from paramTypes (preferred) or signature parsing (fallback).
  * Handles all languages: TS sets paramTypes, Java/Go only have signature.
  */
-export function normalizeParamCount(record: FunctionRecord): number {
+function normalizeParamCount(record: FunctionRecord): number {
   let count = 0;
   if (record.paramTypes && record.paramTypes.length > 0) {
     count = record.paramTypes.length;
@@ -72,13 +72,13 @@ export function countParamsFromSignature(signature: string): number {
 }
 
 /** Call graph in-degree: functions called by many others are architecturally central */
-export function normalizeCentrality(entry: CallGraphEntry | undefined): number {
+function normalizeCentrality(entry: CallGraphEntry | undefined): number {
   if (!entry) return 0;
   return clamp(entry.calledBy.length / 5, 0, 1);
 }
 
 /** Public API surfaces are more navigational than private helpers */
-export function normalizeVisibility(record: FunctionRecord): number {
+function normalizeVisibility(record: FunctionRecord): number {
   switch (record.visibility) {
     case "public": return 1.0;
     case "protected": return 0.7;
@@ -88,14 +88,11 @@ export function normalizeVisibility(record: FunctionRecord): number {
 }
 
 /** Classes are dense information aggregates; interfaces define contracts */
-export function normalizeKind(record: FunctionRecord): number {
+function normalizeKind(record: FunctionRecord): number {
   switch (record.kind) {
     case "class": return 1.0;
     case "method": return 0.8;
     case "function": return 0.8;
-    case "struct": return 0.7;
-    case "enum": return 0.7;
-    case "record": return 0.7;
     case "interface": return 0.6;
     default: return 0.5;
   }
@@ -105,7 +102,7 @@ export function normalizeKind(record: FunctionRecord): number {
 
 type DensityWeights = Config["search"]["density"]["weights"];
 
-export function computeDensityScore(
+function computeDensityScore(
   record: FunctionRecord,
   callGraphEntry: CallGraphEntry | undefined,
   weights: DensityWeights,

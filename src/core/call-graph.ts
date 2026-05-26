@@ -38,7 +38,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
     // Full scan — correct for full rebuild
     this.resolveTargetIds(index);
     this.localVarTypes.clear();
-    this.buildReverseGraph(index);
+    this.buildReverseGraph();
 
     return this.graph;
   }
@@ -52,11 +52,11 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
 
     this.resolveTargetIds(index, toResolve);
     this.localVarTypes.clear();
-    this.addReverseEdgesForEntries(toResolve, index);
+    this.addReverseEdgesForEntries(toResolve);
   }
 
-  removeByFile(filePath: string, _index: IFunctionIndexReader): void {
-    // Find record IDs from the graph itself (not the index, which may already be cleared)
+  removeByFile(filePath: string): void {
+    // Find record IDs from the graph itself by ID prefix.
     // ID format: "filePath::functionName"
     const filePrefix = `${filePath}::`;
     const recordIds = Array.from(this.graph.keys()).filter(id => id.startsWith(filePrefix));
@@ -153,7 +153,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
         const rawCalls = parser.parseCalls(source, record.lineStart, record.lineEnd);
         const resolvedCalls = rawCalls.map(call => {
           const target = call.objectName ? `${call.objectName}.${call.name}` : call.name;
-          const resolvedFile = this.resolveCallTarget(call, imports, filePath);
+          const resolvedFile = this.resolveCallTarget(call, imports);
           return { target, resolvedFile, resolvedId: null as string | null };
         });
 
@@ -168,7 +168,6 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
   private resolveCallTarget(
     call: { name: string; objectName?: string },
     imports: import("../types/index.js").ImportMap,
-    _currentFile: string,
   ): string | null {
     if (call.objectName) {
       // obj.method() — check if obj is an imported name
@@ -380,7 +379,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
    * The alreadyTracked check prevents duplicates when processing affected callers
    * that already have reverse edges for their non-nullified calls.
    */
-  private addReverseEdgesForEntries(entryIds: Set<string>, index: IFunctionIndexReader): void {
+  private addReverseEdgesForEntries(entryIds: Set<string>): void {
     for (const callerId of entryIds) {
       const entry = this.graph.get(callerId);
       if (!entry) continue;
@@ -402,7 +401,7 @@ export class CallGraphManager implements ICallGraphReader, ICallGraphWriter {
    * Build the complete reverse graph from scratch.
    * Used by full rebuild only — clears all calledBy arrays and rebuilds from forward edges.
    */
-  private buildReverseGraph(_index: IFunctionIndexReader): void {
+  private buildReverseGraph(): void {
     // Clear all calledBy arrays first to avoid stale/duplicate entries
     for (const entry of this.graph.values()) {
       entry.calledBy = [];

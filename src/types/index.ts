@@ -6,7 +6,7 @@ export interface FunctionRecord {
   filePath: string;              // "domain/order/OrderService.java"
   module: string;                // "domain/order" (hierarchical, sourceRoot stripped)
   name: string;                  // "processOrder"
-  kind: "function" | "method" | "class" | "interface" | "struct" | "enum" | "record";
+  kind: "function" | "method" | "class" | "interface";
   language: string;              // "python" | "typescript" | "go" | ...
   visibility: "public" | "private" | "protected";
   isAsync: boolean;
@@ -86,7 +86,7 @@ export type CallGraph = Map<string, CallGraphEntry>;
 
 export interface TypeNode {
   name: string;
-  kind: "interface" | "class" | "type_alias" | "trait" | "struct" | "protocol" | "record";
+  kind: "interface" | "class" | "struct" | "record";
   filePath: string;
   lineStart: number;
   lineEnd: number;
@@ -131,7 +131,7 @@ export type ImportMap = Map<string, {
 
 export interface RawFunctionInfo {
   name: string;
-  kind: "function" | "method" | "class" | "interface" | "struct" | "enum" | "record";
+  kind: "function" | "method" | "class" | "interface";
   signature: string;
   lineStart: number;
   lineEnd: number;
@@ -147,7 +147,6 @@ export interface RawFunctionInfo {
 export interface RawCallInfo {
   name: string;
   objectName?: string;
-  line: number;
 }
 
 export interface RawImportInfo {
@@ -157,7 +156,7 @@ export interface RawImportInfo {
 
 export interface RawTypeRelationship {
   className: string;
-  kind: "class" | "interface" | "type_alias" | "trait" | "struct" | "record";
+  kind: "class" | "interface" | "struct" | "record";
   implements: string[];
   extends: string[];
   members?: Array<{ name: string; type: string }>;  // property/field → type

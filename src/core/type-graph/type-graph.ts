@@ -41,7 +41,7 @@ export class TypeGraphManager implements ITypeGraphReader, ITypeGraphWriter {
 
   removeByFile(filePath: string): void {
     const filePrefix = `${filePath}::`;
-    for (const [name, node] of this.graph) {
+    for (const node of this.graph.values()) {
       if (node.filePath === filePath) {
         // Don't delete the node — other files may reference it.
         // Clear file-owned data but preserve cross-file references.

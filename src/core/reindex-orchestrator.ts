@@ -90,7 +90,7 @@ export class ReindexOrchestrator implements IReindexOrchestrator {
 
     for (const f of allAffectedFiles) {
       ws.typeGraphWriter.removeByFile(f);
-      ws.callGraphWriter.removeByFile(f, ws.index);
+      ws.callGraphWriter.removeByFile(f);
     }
     // Type graph first — call graph uses it for interface-based resolution
     await ws.typeGraphWriter.buildForFiles(changedFilePaths, ws.index, this.parsers, ws.projectRoot);

@@ -150,7 +150,7 @@ export async function createServices(projectRoot?: string): Promise<AppContext> 
   };
 }
 
-export interface WorkspaceEmbedPlan {
+interface WorkspaceEmbedPlan {
   freshBuild: boolean;
   staleIds: string[];
   vectorCount: number;

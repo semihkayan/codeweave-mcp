@@ -19,7 +19,7 @@ export interface TestCase {
 export interface TestResult {
   label: string;
   tool: string;
-  status: "pass" | "fail" | "data" | "skip";
+  status: "pass" | "fail" | "data";
   elapsedMs: number;
   tokens: number;
   data: any;
@@ -33,7 +33,6 @@ export interface SuiteReport {
   passed: number;
   failed: number;
   dataOnly: number;
-  skipped: number;
   totalMs: number;
 }
 
@@ -431,7 +430,6 @@ function buildReport(project: string, results: TestResult[], totalMs: number): S
     passed: results.filter(r => r.status === "pass").length,
     failed: results.filter(r => r.status === "fail").length,
     dataOnly: results.filter(r => r.status === "data").length,
-    skipped: results.filter(r => r.status === "skip").length,
     totalMs: Math.round(totalMs),
   };
 }
@@ -458,8 +456,6 @@ function printReport(report: SuiteReport): void {
       if (r.data != null) {
         console.log(`      data: ${JSON.stringify(r.data).slice(0, 200)}`);
       }
-    } else if (r.status === "skip") {
-      console.log(`      ${r.error ?? r.detail}`);
     }
     console.log();
   }
@@ -467,7 +463,6 @@ function printReport(report: SuiteReport): void {
   console.log("═".repeat(50));
   const parts = [`${report.passed} passed`, `${report.failed} failed`];
   if (report.dataOnly > 0) parts.push(`${report.dataOnly} data-only`);
-  if (report.skipped > 0) parts.push(`${report.skipped} skipped`);
   parts.push(`${(report.totalMs / 1000).toFixed(1)}s`);
   console.log(`  ${parts.join(" | ")}`);
   console.log("═".repeat(50));
